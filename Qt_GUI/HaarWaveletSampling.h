@@ -27,7 +27,6 @@ public:
 
 private:
 	int getVal(const DensityMap &dm, const std::pair<int, int>& index) const { return dm[index.first][index.second]; }
-	double getConvolvedVal(int i, int j) const;
 	void transformHelper(DensityMap & dm, int i, int j, int interval, bool inverse = false);
 	std::vector<std::pair<int, int>> lowDensityJudgementHelper(const std::vector<std::pair<int, int>>& indices) const;
 

@@ -36,18 +36,6 @@ Indices HaarWaveletSampling::execute(const weak_ptr<FilteredPointSet> origin)
 	return selectSeeds();
 }
 
-double HaarWaveletSampling::getConvolvedVal(int i, int j) const
-{
-	const static vector<pair<int, int>> offsets{ { -1, -1 },{ -1, 0 },{ -1, 1 },{ 0, -1 },{ 0, 1 },{ 1, -1 },{ 1, 0 },{ 1, 1 } };
-	double base = screen_grids[i][j].size(), val = 8.0 + base; // need new parameter?
-	for (auto &p : offsets) {
-		int x = i + p.first, y = j + p.second;
-		if(x > 0 && x < horizontal_bin_num && y > 0 && y < vertical_bin_num)
-			val -= screen_grids[x][y].size() / base;
-	}
-	return val;
-}
-
 void HaarWaveletSampling::transformHelper(DensityMap & dm, int i, int j, int interval, bool inverse)
 {
 	auto &a = dm[i][j], &b = dm[i + interval][j], &c = dm[i][j + interval], &d = dm[i + interval][j + interval];
@@ -139,19 +127,19 @@ struct FourElementsGroup
 
 void HaarWaveletSampling::inverseTransfrom()
 {
-//#include <fstream>
+#include <fstream>
 	int k;
 	assigned_map[0][0] = visual_map[0][0];
-	for (int shift = side_length; shift > end_shift; shift = k) {
+	for (int shift = side_length; shift > 1; shift = k) {
 		k = shift >> 1;
 		
-		//ofstream output(string("./results/test_csv/") + to_string(shift) + ".csv", ios_base::trunc);
+		ofstream output(string("./results/test_csv/") + to_string(shift) + ".csv", ios_base::trunc);
 		for (int j = 0; j < vertical_bin_num; j += shift) {
 			for (int i = 0; i < horizontal_bin_num; i += shift) {
 				vector<pair<int, int>> indices = { { i,j },{ i + k,j },{ i,j + k },{ i + k,j + k } };
 				vector<pair<int, int>> low_density_indices = lowDensityJudgementHelper(indices);
-				//if(assigned_map[i][j]>0) output << assigned_map[i][j];
-				//output << ',';
+				if(assigned_map[i][j]>0) output << assigned_map[i][j];
+				output << ',';
 
 				int visual_point_num = visual_map[i][j], assigned_visual_point_num = assigned_map[i][j];
 				transformHelper(actual_map, i, j, k, true);
@@ -160,37 +148,52 @@ void HaarWaveletSampling::inverseTransfrom()
 
 				if (visual_point_num == 0) continue;
 
-				// calculate assigned number based on relative data density
-				sort(indices.begin(), indices.end(), [this](const pair<int,int> &a, const pair<int, int> &b) {
-					return getVal(actual_map, a) > getVal(actual_map, b);
-				});
-				int &max_assigned_val = assigned_map[indices[0].first][indices[0].second];
-				max_assigned_val = (int) ceil(static_cast<double>(getVal(visual_map, indices[0])) * assigned_visual_point_num / visual_point_num);
+				if(shift > end_shift) {
+					// calculate assigned number based on relative data density
+					sort(indices.begin(), indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
+						return getVal(actual_map, a) > getVal(actual_map, b);
+					});
+					int &max_assigned_val = assigned_map[indices[0].first][indices[0].second];
+					max_assigned_val = (int)ceil(static_cast<double>(getVal(visual_map, indices[0])) * assigned_visual_point_num / visual_point_num);
 
-				double sampling_ratio_zero = static_cast<double>(getVal(visual_map, indices[0])) / getVal(actual_map, indices[0]);
-				int remain_assigned_point_num = assigned_visual_point_num - max_assigned_val;
-				for (size_t _i = 1, sz = indices.size(); _i < sz && remain_assigned_point_num > 0; ++_i) {
-					int actual_val = getVal(actual_map, indices[_i]);
-					if (actual_val == 0) break; // an empty area can only lead to useless calculation
+					double sampling_ratio_zero = static_cast<double>(getVal(visual_map, indices[0])) / getVal(actual_map, indices[0]);
+					int remain_assigned_point_num = assigned_visual_point_num - max_assigned_val;
+					for (size_t _i = 1, sz = indices.size(); _i < sz && remain_assigned_point_num > 0; ++_i) {
+						int actual_val = getVal(actual_map, indices[_i]);
+						if (actual_val == 0) break; // an empty area can only lead to useless calculation
 
-					int assigned_val = ceil((sampling_ratio_zero + params.non_uniform_threshold) * actual_val * assigned_visual_point_num / visual_point_num); // at least 1
-					assigned_val = min({ assigned_val, getVal(visual_map, indices[_i]), remain_assigned_point_num });
-					assigned_map[indices[_i].first][indices[_i].second] = assigned_val;
+						int assigned_val = ceil((sampling_ratio_zero + params.non_uniform_threshold) * actual_val * assigned_visual_point_num / visual_point_num); // at least 1
+						assigned_val = min({ assigned_val, getVal(visual_map, indices[_i]), remain_assigned_point_num });
+						assigned_map[indices[_i].first][indices[_i].second] = assigned_val;
 
-					remain_assigned_point_num -= assigned_val;
+						remain_assigned_point_num -= assigned_val;
+					}
+
+					// calculate assigned number for low density regions intentionally
+					sort(low_density_indices.begin(), low_density_indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
+						return getVal(visual_map, a) < getVal(visual_map, b);
+					});
+					for (size_t _i = 1, sz = low_density_indices.size(); _i < sz; ++_i) {
+						int x = getVal(assigned_map, low_density_indices[_i - 1]), y = getVal(assigned_map, low_density_indices[_i]);
+						if (x == 0) continue;
+
+						int assigned_val = ceil((static_cast<double>(getVal(visual_map, low_density_indices[_i])) / getVal(visual_map, low_density_indices[_i - 1]) + y) / (1.0 + 1.0 / x));
+						assigned_val = min(assigned_val, getVal(visual_map, low_density_indices[_i]));
+						assigned_map[low_density_indices[_i].first][low_density_indices[_i].second] = assigned_val;
+					}
 				}
+				else {
+					sort(indices.begin(), indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
+						return getVal(actual_map, a) > getVal(actual_map, b);
+					});
+					int remain_assigned_point_num = assigned_visual_point_num;
+					for (size_t _i = 0, sz = indices.size(); _i < sz && remain_assigned_point_num > 0; ++_i) {
+						int assigned_val = ceil(static_cast<double>(getVal(visual_map, indices[_i])) * assigned_visual_point_num / visual_point_num);
+						assigned_val = min({ assigned_val, getVal(visual_map, indices[_i]), remain_assigned_point_num });
+						assigned_map[indices[_i].first][indices[_i].second] = assigned_val;
 
-				// calculate assigned number for low density regions intentionally
-				sort(low_density_indices.begin(), low_density_indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
-					return getVal(visual_map, a) < getVal(visual_map, b);
-				});
-				for (size_t _i = 1, sz = low_density_indices.size(); _i < sz; ++_i) {
-					int x = getVal(assigned_map, low_density_indices[_i - 1]), y = getVal(assigned_map, low_density_indices[_i]);
-					if (x == 0) continue;
-
-					int assigned_val = ceil((static_cast<double>(getVal(visual_map, low_density_indices[_i])) / getVal(visual_map, low_density_indices[_i - 1]) + y) / (1.0 + 1.0 / x));
-					assigned_val = min(assigned_val, getVal(visual_map, low_density_indices[_i]));
-					assigned_map[low_density_indices[_i].first][low_density_indices[_i].second] = assigned_val;
+						remain_assigned_point_num -= assigned_val;
+					}
 				}
 
 				//FourElementsGroup actual_vals = { getVal(actual_map, indices[0]), getVal(actual_map, indices[1]), getVal(actual_map, indices[2]), getVal(actual_map, indices[3]) };
@@ -198,7 +201,7 @@ void HaarWaveletSampling::inverseTransfrom()
 				//FourElementsGroup assigned_vals = { getVal(assigned_map, indices[0]), getVal(assigned_map, indices[1]), getVal(assigned_map, indices[2]), getVal(assigned_map, indices[3]) };
 				//int a = 1;
 			}
-			//output << '\n';
+			output << '\n';
 		}
 	}
 }
@@ -206,26 +209,14 @@ void HaarWaveletSampling::inverseTransfrom()
 Indices HaarWaveletSampling::selectSeeds()
 {
 	Indices result;
-	for (uint i = 0; i < horizontal_bin_num; i += end_shift) {
-		for (uint j = 0; j < vertical_bin_num; j += end_shift) {
-			if (assigned_map[i][j] > 0) {
-				vector<tuple<double, int, int>> num_index;
-				for (int _i = i, dest_i = min(i + end_shift, horizontal_bin_num); _i < dest_i; ++_i) {
-					for (int _j = j, dest_j = min(j + end_shift, vertical_bin_num); _j < dest_j; ++_j) {
-						if(!screen_grids[_i][_j].empty())
-							num_index.push_back(make_tuple(getConvolvedVal(_i, _j), _i, _j));
-					}
-				}
-				if(assigned_map[i][j] < visual_map[i][j])
-					nth_element(num_index.begin(), num_index.begin() + assigned_map[i][j], num_index.end(), greater<tuple<double, int, int>>());
-				//shuffle(num_index.begin(), num_index.end(), g);
-				
-				for (uint idx = 0; idx < assigned_map[i][j]; ++idx) {
-					Indices &local = screen_grids[get<1>(num_index[idx])][get<2>(num_index[idx])];
-					//qDebug() << i << ' ' << j;
-					std::uniform_int_distribution<> dis(0, local.size()-1);
-					result.push_back(local[dis(g)]);
-				}
+
+	for (uint i = 0; i < horizontal_bin_num; ++i) {
+		for (uint j = 0; j < vertical_bin_num; ++j) {
+			if (assigned_map[i][j] == 1) {
+				Indices &local = screen_grids[i][j];
+				//qDebug() << i << ' ' << j;
+				std::uniform_int_distribution<> dis(0, local.size() - 1);
+				result.push_back(local[dis(g)]);
 			}
 		}
 	}
