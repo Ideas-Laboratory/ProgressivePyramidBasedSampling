@@ -46,7 +46,7 @@ private:
 
 	int end_shift;
 
-	std::mt19937 g{ std::random_device{}() };
+	std::mt19937 gen{ std::random_device{}() };
 };
 
 inline int visual2grid(qreal pos, qreal margin)

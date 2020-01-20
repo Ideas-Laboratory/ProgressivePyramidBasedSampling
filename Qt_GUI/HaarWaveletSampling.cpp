@@ -120,26 +120,21 @@ void HaarWaveletSampling::forwardTransform()
 	}
 }
 
-struct FourElementsGroup
-{
-	int a, b, c, d;
-};
-
 void HaarWaveletSampling::inverseTransfrom()
 {
-#include <fstream>
+//#include <fstream>
 	int k;
 	assigned_map[0][0] = visual_map[0][0];
 	for (int shift = side_length; shift > 1; shift = k) {
 		k = shift >> 1;
 		
-		ofstream output(string("./results/test_csv/") + to_string(shift) + ".csv", ios_base::trunc);
+		//ofstream output(string("./results/test_csv/") + to_string(shift) + ".csv", ios_base::trunc);
 		for (int j = 0; j < vertical_bin_num; j += shift) {
 			for (int i = 0; i < horizontal_bin_num; i += shift) {
 				vector<pair<int, int>> indices = { { i,j },{ i + k,j },{ i,j + k },{ i + k,j + k } };
 				vector<pair<int, int>> low_density_indices = lowDensityJudgementHelper(indices);
-				if(assigned_map[i][j]>0) output << assigned_map[i][j];
-				output << ',';
+				//if(assigned_map[i][j]>0) output << assigned_map[i][j];
+				//output << ',';
 
 				int visual_point_num = visual_map[i][j], assigned_visual_point_num = assigned_map[i][j];
 				transformHelper(actual_map, i, j, k, true);
@@ -151,7 +146,9 @@ void HaarWaveletSampling::inverseTransfrom()
 				if(shift > end_shift) {
 					// calculate assigned number based on relative data density
 					sort(indices.begin(), indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
-						return getVal(actual_map, a) > getVal(actual_map, b);
+						int am_a = getVal(actual_map, a), am_b = getVal(actual_map, b);
+						return am_a > am_b ? true : am_a < am_b ? false :
+							getVal(visual_map, a) > getVal(visual_map, b);
 					});
 					int &max_assigned_val = assigned_map[indices[0].first][indices[0].second];
 					max_assigned_val = (int)ceil(static_cast<double>(getVal(visual_map, indices[0])) * assigned_visual_point_num / visual_point_num);
@@ -162,7 +159,7 @@ void HaarWaveletSampling::inverseTransfrom()
 						int actual_val = getVal(actual_map, indices[_i]);
 						if (actual_val == 0) break; // an empty area can only lead to useless calculation
 
-						int assigned_val = ceil((sampling_ratio_zero + params.non_uniform_threshold) * actual_val * assigned_visual_point_num / visual_point_num); // at least 1
+						int assigned_val = round(sampling_ratio_zero * actual_val * assigned_visual_point_num / visual_point_num); // at least 1
 						assigned_val = min({ assigned_val, getVal(visual_map, indices[_i]), remain_assigned_point_num });
 						assigned_map[indices[_i].first][indices[_i].second] = assigned_val;
 
@@ -196,12 +193,8 @@ void HaarWaveletSampling::inverseTransfrom()
 					}
 				}
 
-				//FourElementsGroup actual_vals = { getVal(actual_map, indices[0]), getVal(actual_map, indices[1]), getVal(actual_map, indices[2]), getVal(actual_map, indices[3]) };
-				//FourElementsGroup visual_vals = { getVal(visual_map, indices[0]), getVal(visual_map, indices[1]), getVal(visual_map, indices[2]), getVal(visual_map, indices[3]) };
-				//FourElementsGroup assigned_vals = { getVal(assigned_map, indices[0]), getVal(assigned_map, indices[1]), getVal(assigned_map, indices[2]), getVal(assigned_map, indices[3]) };
-				//int a = 1;
 			}
-			output << '\n';
+			//output << '\n';
 		}
 	}
 }
@@ -216,7 +209,7 @@ Indices HaarWaveletSampling::selectSeeds()
 				Indices &local = screen_grids[i][j];
 				//qDebug() << i << ' ' << j;
 				std::uniform_int_distribution<> dis(0, local.size() - 1);
-				result.push_back(local[dis(g)]);
+				result.push_back(local[dis(gen)]);
 			}
 		}
 	}

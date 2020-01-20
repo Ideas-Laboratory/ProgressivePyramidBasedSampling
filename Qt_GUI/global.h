@@ -69,7 +69,6 @@ struct Param {
 	uint point_radius;
 	uint grid_width;
 	uint end_level;
-	double non_uniform_threshold;
 	double low_density_threshold;
 	//bool show_border;
 	bool use_alpha_channel;

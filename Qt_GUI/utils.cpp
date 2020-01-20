@@ -28,6 +28,11 @@ PointSet * readDataset(string filename, unordered_map<uint, string>* class2label
 		y = atof(value.c_str());
 
 		getline(input, value);
+		{ // deal with timestamp
+			size_t pos = 0;
+			if ((pos = value.find(',')) != std::string::npos)
+				value = value.substr(pos + 1);
+		}
 		if (label2class.find(value) == label2class.end()) { // mapping label (string) to class (unsigned int)
 			label2class[value] = label2class.size();
 		}

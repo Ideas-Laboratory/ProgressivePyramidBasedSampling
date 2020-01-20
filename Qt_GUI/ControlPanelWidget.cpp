@@ -52,17 +52,6 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 		connect(spin_end_level, QOverload<int>::of(&QSpinBox::valueChanged),
 			[this](int value) { params.end_level = value; });
 
-		QLabel* threshold_label = new QLabel("Non-uniform threshold:", this);
-		QDoubleSpinBox* spin_threshold = new QDoubleSpinBox(this);
-		spin_threshold->setDecimals(4);
-		spin_threshold->setRange(0.0, 1.0);
-		spin_threshold->setSingleStep(0.01);
-		spin_threshold->setValue(params.non_uniform_threshold);
-		spin_threshold->setToolTip(
-			"How much relative density unbalance between siblings can be tolerated.");
-		connect(spin_threshold, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-			[this](double value) { params.non_uniform_threshold = value; });
-
 		QLabel* occupied_space_ratio_label = new QLabel("Low density threshold:", this);
 		QDoubleSpinBox* spin_occupied_space_ratio = new QDoubleSpinBox(this);
 		spin_occupied_space_ratio->setDecimals(4);
@@ -78,10 +67,8 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 		algoGroupLayout->addWidget(spin_grid_width, 0, 1);
 		algoGroupLayout->addWidget(end_level_label, 1, 0);
 		algoGroupLayout->addWidget(spin_end_level, 1, 1);
-		algoGroupLayout->addWidget(threshold_label, 2, 0);
-		algoGroupLayout->addWidget(spin_threshold, 2, 1);
-		algoGroupLayout->addWidget(occupied_space_ratio_label, 3, 0);
-		algoGroupLayout->addWidget(spin_occupied_space_ratio, 3, 1);
+		algoGroupLayout->addWidget(occupied_space_ratio_label, 2, 0);
+		algoGroupLayout->addWidget(spin_occupied_space_ratio, 2, 1);
 		//algoGroupLayout->addWidget(depth_label, 3, 0);
 		//algoGroupLayout->addWidget(spin_depth, 3, 1);
 		//algoGroupLayout->addWidget(show_bound_option, 4, 0, 1, -1);
