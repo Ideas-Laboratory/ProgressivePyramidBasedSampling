@@ -239,6 +239,8 @@ void SamplingProcessViewer::paletteToColors()
 
 void SamplingProcessViewer::drawPoint(qreal x, qreal y, qreal radius, QBrush b)
 {
+	//x += params.grid_width*(2.0*rand()/RAND_MAX - 1.0);
+	//y += params.grid_width*(2.0*rand()/RAND_MAX - 1.0);
 	if (params.use_alpha_channel) { // draw gaussian shape
 		//QColor c2 = b.color();
 		//c2.setAlpha(60);
@@ -246,12 +248,12 @@ void SamplingProcessViewer::drawPoint(qreal x, qreal y, qreal radius, QBrush b)
 		//c2.setAlpha(30);
 		//QPen p(c2, 3);
 		//this->scene()->addEllipse(x - 2.0, y - 2.0, 4.0, 4.0, p, Qt::NoBrush);
-		QColor c = Qt::gray;//b.color();
-		c.setAlpha(30);
+		QColor c = color_brushes[0].color();//b.color();
+		c.setAlpha(15);
 		this->scene()->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, c);
 	}
 	else {
 		//this->scene()->addEllipse(x, y, 1.0, 1.0, Qt::NoPen, b);
-		this->scene()->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, b);
+		this->scene()->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, color_brushes[0]);
 	}
 }

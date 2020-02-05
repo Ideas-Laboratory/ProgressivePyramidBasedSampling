@@ -127,7 +127,7 @@ void HaarWaveletSampling::inverseTransfrom()
 	assigned_map[0][0] = visual_map[0][0];
 	for (int shift = side_length; shift > 1; shift = k) {
 		k = shift >> 1;
-		
+
 		//ofstream output(string("./results/test_csv/") + to_string(shift) + ".csv", ios_base::trunc);
 		for (int j = 0; j < vertical_bin_num; j += shift) {
 			for (int i = 0; i < horizontal_bin_num; i += shift) {
@@ -192,10 +192,48 @@ void HaarWaveletSampling::inverseTransfrom()
 						remain_assigned_point_num -= assigned_val;
 					}
 				}
-
 			}
 			//output << '\n';
 		}
+
+		//if (k == end_shift) { // Gaussian smoothing
+		//	vector<vector<double>> smooth_assign_map(horizontal_bin_num);
+		//	for (int i = 0; i < horizontal_bin_num; ++i) {
+		//		smooth_assign_map[i].resize(vertical_bin_num);
+		//	}
+
+		//	const vector<vector<pair<int, int>>> offsets{
+		//		{ { -1,-1 },{ -1, 1 },{ 1,-1 },{ 1,1 } },
+		//		{ { -1, 0 },{ 0,-1 },{ 0, 1 },{ 1,0 } } };
+		//	const double share = 0.0416; // 1/24
+		//	for (int j = 0; j < vertical_bin_num; j += k) {
+		//		for (int i = 0; i < horizontal_bin_num; i += k) {
+		//			if (assigned_map[i][j] == 0) continue;
+
+		//			for (int g = 0, g_sz = offsets.size(); g < g_sz; ++g) {
+		//				double i_share = (g + 1)*share*assigned_map[i][j];
+		//				for (int o = 0, o_sz = offsets[g].size(); o < o_sz; ++o) {
+		//					auto idx = make_pair(i + k*offsets[g][o].first, j + k*offsets[g][o].second);
+		//					if (idx.first > -1 && idx.first < horizontal_bin_num && idx.second > -1 && idx.second < vertical_bin_num) {
+		//						smooth_assign_map[idx.first][idx.second] += i_share;
+		//					}
+		//				}
+		//			}
+		//			smooth_assign_map[i][j] += assigned_map[i][j];
+		//		}
+		//	}
+
+		//	//ofstream output("./results/test_csv/0.csv", ios_base::trunc);
+		//	for (int j = 0; j < vertical_bin_num; j += k) {
+		//		for (int i = 0; i < horizontal_bin_num; i += k) {
+		//			assigned_map[i][j] = round(smooth_assign_map[i][j]);
+		//			
+		//			//if (assigned_map[i][j]>0) output << assigned_map[i][j];
+		//			//output << ',';
+		//		}
+		//		//output << '\n';
+		//	}
+		//}
 	}
 }
 
