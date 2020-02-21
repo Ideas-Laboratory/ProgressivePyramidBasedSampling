@@ -50,16 +50,45 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 		spin_end_level->setRange(0, 10);
 		spin_end_level->setValue(params.end_level);
 		connect(spin_end_level, QOverload<int>::of(&QSpinBox::valueChanged),
-			[this](int value) { params.end_level = value; });
+			[](int value) { params.end_level = value; });
+
+		QLabel* frame_id_label = new QLabel("Frame ID:", this);
+		QSpinBox* spin_frame_id = new QSpinBox(this);
+		spin_frame_id->setRange(1, this->viewer->getPointNum() / params.batch + 1);
+		spin_frame_id->setValue(params.displayed_frame_id + 1);
+		connect(spin_frame_id, QOverload<int>::of(&QSpinBox::valueChanged),
+			[](int value) { params.displayed_frame_id = value - 1; });
+		connect(viewer, &SamplingProcessViewer::inputImageChanged, [spin_frame_id](uint pointNum) {
+			auto &result = div((int)pointNum, params.batch);
+			spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
+		});
+
+		QLabel* batch_label = new QLabel("Batch size:", this);
+		QSpinBox* spin_batch = new QSpinBox(this);
+		spin_batch->setRange(1, 100000);
+		spin_batch->setValue(params.batch);
+		connect(spin_batch, QOverload<int>::of(&QSpinBox::valueChanged), [this, spin_frame_id](int value) {
+			params.batch = value;
+			auto &result = div((int)this->viewer->getPointNum(), params.batch);
+			spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
+		});
+
+		QLabel* eps_label = new QLabel("Error tolerance:", this);
+		QDoubleSpinBox* spin_eps = new QDoubleSpinBox(this);
+		spin_eps->setDecimals(3);
+		spin_eps->setRange(0.0, 1.0);
+		spin_eps->setValue(params.epsilon);
+		connect(spin_eps, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+			[this](double value) { params.epsilon = value; });
 
 		QLabel* occupied_space_ratio_label = new QLabel("Low density threshold:", this);
 		QDoubleSpinBox* spin_occupied_space_ratio = new QDoubleSpinBox(this);
 		spin_occupied_space_ratio->setDecimals(4);
 		spin_occupied_space_ratio->setRange(0.0, 1.0);
 		spin_occupied_space_ratio->setSingleStep(0.1);
-		spin_occupied_space_ratio->setValue(params.low_density_threshold);
+		spin_occupied_space_ratio->setValue(params.low_density_weight);
 		connect(spin_occupied_space_ratio, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-			[this](double value) { params.low_density_threshold = value; });
+			[this](double value) { params.low_density_weight = value; });
 
 		QGridLayout* algoGroupLayout = new QGridLayout(algorithm_group);
 		algorithm_group->setLayout(algoGroupLayout);
@@ -69,8 +98,12 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 		algoGroupLayout->addWidget(spin_end_level, 1, 1);
 		algoGroupLayout->addWidget(occupied_space_ratio_label, 2, 0);
 		algoGroupLayout->addWidget(spin_occupied_space_ratio, 2, 1);
-		//algoGroupLayout->addWidget(depth_label, 3, 0);
-		//algoGroupLayout->addWidget(spin_depth, 3, 1);
+		algoGroupLayout->addWidget(batch_label, 3, 0);
+		algoGroupLayout->addWidget(spin_batch, 3, 1);
+		algoGroupLayout->addWidget(frame_id_label, 4, 0);
+		algoGroupLayout->addWidget(spin_frame_id, 4, 1);
+		algoGroupLayout->addWidget(eps_label, 5, 0);
+		algoGroupLayout->addWidget(spin_eps, 5, 1);
 		//algoGroupLayout->addWidget(show_bound_option, 4, 0, 1, -1);
 
 		layout->addWidget(algorithm_group);
@@ -107,11 +140,10 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 	buttons.push_back(startButton);
 	startLayout->addWidget(startButton);
 
-	// adjust button
-	QPushButton* adjustButton = new QPushButton("Adjust", this);
-	adjustButton->setEnabled(false);
-	startLayout->addWidget(adjustButton);
-	buttons.push_back(adjustButton);
+	QPushButton* showButton = new QPushButton("Show", this);
+	buttons.push_back(showButton);
+	startLayout->addWidget(showButton);
+
 	startGroup->setLayout(startLayout);
 	layout->addWidget(startGroup);
 
@@ -128,14 +160,13 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 
 	addClassSelectionBox();
 
-	connect(fileButton, &QPushButton::pressed, [this, adjustButton, save_CSV]() {
+	connect(fileButton, &QPushButton::pressed, [this, save_CSV]() {
 		QString path = QFileDialog::getOpenFileName(this, tr("Open Dataset"), QString(),
 			tr("Comma-Separated Values Files (*.csv)"));
 
 		if (path.isEmpty())
 			return;
 
-		adjustButton->setEnabled(false);
 		save_CSV->setEnabled(false);
 		showCurrentFileName(QFileInfo(path).fileName());
 		this->class2label->clear();
@@ -159,9 +190,8 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 		this->disableButtons();
 		this->viewer->sample();
 	});
-	connect(adjustButton, &QPushButton::released, [this]() {
-		this->disableButtons();
-		this->viewer->sampleWithoutTreeConstruction();
+	connect(showButton, &QPushButton::released, [this]() {
+		this->viewer->redrawPoints();
 	});
 }
 

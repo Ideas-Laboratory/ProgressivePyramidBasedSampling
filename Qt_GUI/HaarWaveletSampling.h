@@ -21,6 +21,7 @@ public:
 	Indices execute(const std::weak_ptr<FilteredPointSet> origin);
 
 	Indices selectSeeds();
+	std::pair<Indices, Indices> getSeedsWithDiff();
 
 	uint getSideLength() { return side_length; }
 	void setEndShift(int shift) { end_shift = shift; }
@@ -28,9 +29,12 @@ public:
 private:
 	int getVal(const DensityMap &dm, const std::pair<int, int>& index) const { return dm[index.first][index.second]; }
 	void transformHelper(DensityMap & dm, int i, int j, int interval, bool inverse = false);
-	std::vector<std::pair<int, int>> lowDensityJudgementHelper(const std::vector<std::pair<int, int>>& indices) const;
+	std::vector<std::vector<std::pair<int, int>>> lowDensityJudgementHelper(const std::vector<std::pair<int, int>>& indices) const;
+	bool hasDiscrepancy(const std::vector<std::pair<int, int>>& indices);
 
-	void convertToDensityMaps(const std::weak_ptr<FilteredPointSet> origin);
+	void computeAssignMapsProgressively(const std::weak_ptr<FilteredPointSet> origin);
+	void initializeGrids();
+	void convertToDensityMap();
 	void forwardTransform();
 	void inverseTransfrom();
 	
@@ -39,6 +43,11 @@ private:
 	DensityMap actual_map;
 	DensityMap visual_map;
 	DensityMap assigned_map;
+
+	std::vector<DensityMap> previous_assigned_maps;
+	std::vector<std::vector<bool>> update_needed_map;
+	bool is_first_frame;
+	int last_frame_id;
 
 	uint horizontal_bin_num, // the actual number of horizontal bins
 		 vertical_bin_num, // the actual number of vertical bins

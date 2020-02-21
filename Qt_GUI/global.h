@@ -9,7 +9,7 @@
 //constants
 #define MY_DATASET_FILENAME "./data/synthesis1.csv"
 
-const static int CANVAS_WIDTH = 1600;//316;//1080; //720; //480; 
+const static int CANVAS_WIDTH = 900; //1600;//316;//1080; //720; //480; 
 const static int CANVAS_HEIGHT = 900;//316;//810; //540; //360; 
 
 const static struct {
@@ -66,10 +66,13 @@ struct StatisticalInfo {
 };
 
 struct Param {
+	uint batch;
+	uint displayed_frame_id;
+	double epsilon;
 	uint point_radius;
 	uint grid_width;
 	uint end_level;
-	double low_density_threshold;
+	double low_density_weight;
 	//bool show_border;
 	bool use_alpha_channel;
 };
