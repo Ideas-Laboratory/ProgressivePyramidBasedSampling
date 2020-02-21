@@ -18,7 +18,7 @@ PointSet * readDataset(string filename, unordered_map<uint, string>* class2label
 	while ((char)input.get() < 0);
 	input.unget();
 
-	PointSet* points = new PointSet();
+	vector<tuple<double, double, string>> raw_data;
 	string value;
 	double x = 0, y = 0;
 	unordered_map<string, uint> label2class;
@@ -36,10 +36,14 @@ PointSet * readDataset(string filename, unordered_map<uint, string>* class2label
 		if (label2class.find(value) == label2class.end()) { // mapping label (string) to class (unsigned int)
 			label2class[value] = label2class.size();
 		}
-		points->push_back(make_unique<LabeledPoint>(x, y, label2class[value]));
+		raw_data.push_back(make_tuple(x, y, move(value)));
 	}
 	setClassToLabelMapping(label2class, class2label);
 
+	PointSet* points = new PointSet();
+	for (auto &d : raw_data) {
+		points->push_back(make_unique<LabeledPoint>(get<0>(d), get<1>(d), label2class[get<2>(d)]));
+	}
 	return points;
 }
 

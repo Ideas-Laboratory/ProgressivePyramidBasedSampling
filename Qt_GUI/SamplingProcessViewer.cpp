@@ -58,11 +58,10 @@ void SamplingProcessViewer::setDataset(const PointSet * points)
 	linearScale(points_in_visual_space, real_extent, MARGIN.left, CANVAS_WIDTH - MARGIN.right, MARGIN.top, CANVAS_HEIGHT - MARGIN.bottom);
 
 	//drawPointByClass(points_in_visual_space);
-	//drawPointRandomly(points_in_visual_space);
+	drawPointRandomly(points_in_visual_space);
 	//drawPointLowDensityUpper(points_in_visual_space);
-	drawPointProgressively();
 
-	emit inputImageChanged(points_in_visual_space->size());
+	emit inputImageChanged();
 }
 
 void SamplingProcessViewer::sample()
@@ -79,15 +78,14 @@ void SamplingProcessViewer::sample()
 	emit finished();
 }
 
-void SamplingProcessViewer::showSpecificFrame()
+void SamplingProcessViewer::sampleWithoutTreeConstruction()
 {
 	emit adjustmentStart();
 	seeds = hws.selectSeeds();
+	//drawPointByClass(indicesToPointSet(points_in_visual_space, seeds));
 	drawPointRandomly(points_in_visual_space, seeds);
-	//auto &pr = hws.getSeedsWithDiff();
-	//drawPointsByPair(points_in_visual_space, pr);
-	//pr.first.insert(pr.first.end(), pr.second.begin(), pr.second.end());
-	//seeds = pr.first;
+	//drawPointLowDensityUpper(indicesToPointSet(points_in_visual_space, seeds));
+	//if (params.show_border) drawBorders();
 	emit finished();
 }
 
@@ -130,18 +128,6 @@ void SamplingProcessViewer::saveImagePDF(const QString & path)
 	this->render(&painter);
 }
 
-void SamplingProcessViewer::drawPointProgressively()
-{
-	this->scene()->clear();
-
-	int count = 0, target = (params.displayed_frame_id + 1) * params.batch;
-	for (auto &pr : *points_in_visual_space) {
-		auto &p = pr.second;
-		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
-		if (++count == target) break;
-	}
-}
-
 void SamplingProcessViewer::drawPointByClass(const std::shared_ptr<FilteredPointSet>& points, const Indices& selected)
 {
 	this->scene()->clear();
@@ -181,22 +167,6 @@ void SamplingProcessViewer::drawPointRandomly(const std::shared_ptr<FilteredPoin
 		auto &p = points->at(i);
 		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
 	}
-}
-
-void SamplingProcessViewer::drawPointsByPair(const std::shared_ptr<FilteredPointSet>& points, const std::pair<Indices, Indices>& selected)
-{
-	this->scene()->clear();
-	
-	for (auto &i : selected.first) {
-		auto &p = points->at(i);
-		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
-	}
-	color_index = 2;
-	for (auto &i : selected.second) {
-		auto &p = points->at(i);
-		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
-	}
-	color_index = 0;
 }
 
 void SamplingProcessViewer::drawPointLowDensityUpper(const std::shared_ptr<FilteredPointSet> &points, const Indices& selected)
@@ -252,10 +222,10 @@ void SamplingProcessViewer::drawPointLowDensityUpper(const std::shared_ptr<Filte
 void SamplingProcessViewer::redrawPoints()
 {
 	emit redrawStart();
-	if (seeds.empty())
-		drawPointProgressively();
+	if(seeds.empty()) 
+		drawPointRandomly(points_in_visual_space);
 	else
-		showSpecificFrame();
+		drawPointRandomly(points_in_visual_space, seeds);
 	//if (params.show_border) drawBorders();
 }
 
@@ -278,12 +248,12 @@ void SamplingProcessViewer::drawPoint(qreal x, qreal y, qreal radius, QBrush b)
 		//c2.setAlpha(30);
 		//QPen p(c2, 3);
 		//this->scene()->addEllipse(x - 2.0, y - 2.0, 4.0, 4.0, p, Qt::NoBrush);
-		QColor c = color_brushes[color_index].color();//b.color();
+		QColor c = color_brushes[0].color();//b.color();
 		c.setAlpha(15);
 		this->scene()->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, c);
 	}
 	else {
 		//this->scene()->addEllipse(x, y, 1.0, 1.0, Qt::NoPen, b);
-		this->scene()->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, color_brushes[color_index]);
+		this->scene()->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, color_brushes[0]);
 	}
 }

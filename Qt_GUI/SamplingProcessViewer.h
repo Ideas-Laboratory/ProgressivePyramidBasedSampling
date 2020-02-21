@@ -25,24 +25,23 @@ public:
 	void redrawPoints();
 
 	void sample();
-	void showSpecificFrame();
+	void sampleWithoutTreeConstruction();
 	
 	void saveImagePNG(const QString& path);
 	void saveImageSVG(const QString& path);
 	void saveImagePDF(const QString& path);
 
-	size_t getPointNum() { return points_in_visual_space->size(); }
 	const Indices& getSeleted() { return seeds; }
 	const std::vector<QBrush>& getColorBrushes() { return color_brushes; }
 
-	const std::string ALGORITHM_NAME = "Progressive Sampling for Scatterplots";
+	const std::string ALGORITHM_NAME = "Dynamic Resampling for Animated Scatterplot";
 
 signals:
 	void finished();
 	void redrawStart();
 	void sampleStart();
 	void adjustmentStart();
-	void inputImageChanged(uint pointNum);
+	void inputImageChanged();
 	void iterationStatus(int iteration, int numberPoints, int splits);
 	void areaCounted(StatisticalInfo* total_info, StatisticalInfo* sample_info);
 	void pointSelected(uint index, uint class_);
@@ -52,11 +51,9 @@ protected:
 	void mouseMoveEvent(QMouseEvent *me);
 	void mouseReleaseEvent(QMouseEvent *me);
 
-private:
-	void drawPointProgressively();
+private: 
 	void drawPointByClass(const std::shared_ptr<FilteredPointSet>& points, const Indices& selected = Indices());
 	void drawPointRandomly(const std::shared_ptr<FilteredPointSet>& points, const Indices& selected = Indices());
-	void drawPointsByPair(const std::shared_ptr<FilteredPointSet>& points, const std::pair<Indices, Indices>& selected);
 	void drawPointLowDensityUpper(const std::shared_ptr<FilteredPointSet>& points, const Indices& selected = Indices());
 
 	void paletteToColors();
@@ -77,7 +74,7 @@ private:
 	//std::vector<std::weak_ptr<RecontructedGrid>> nodes;
 
 	std::vector<QBrush> color_brushes;
-	int color_index = 0;
+
 	QPen bound_pen;
 
 	Extent real_extent;
