@@ -19,20 +19,24 @@ HaarWaveletSampling::HaarWaveletSampling(const QRect & bounding_rect)
 	actual_map.resize(side_length);
 	visual_map.resize(side_length);
 	assigned_map.resize(side_length);
+	update_needed_map.resize(side_length);
 	for (uint i = 0; i < side_length; ++i) {
 		actual_map[i].resize(side_length);
 		visual_map[i].resize(side_length);
 		assigned_map[i].resize(side_length);
+		update_needed_map[i].resize(side_length);
 	}
 }
 
 Indices HaarWaveletSampling::execute(const weak_ptr<FilteredPointSet> origin)
 {
 	end_shift = pow(2, params.end_level);
+	last_frame_id = -1;
+	is_first_frame = true;
 
-	convertToDensityMaps(origin);
-	forwardTransform();
-	inverseTransfrom();
+	initializeGrids();
+	previous_assigned_maps.clear();
+	computeAssignMapsProgressively(origin);
 	return selectSeeds();
 }
 
@@ -49,9 +53,9 @@ void HaarWaveletSampling::transformHelper(DensityMap & dm, int i, int j, int int
 	a = A, b = B, c = C, d = D;
 }
 
-vector<pair<int, int>> HaarWaveletSampling::lowDensityJudgementHelper(const vector<pair<int, int>>& indices) const
+vector<vector<pair<int, int>>> HaarWaveletSampling::lowDensityJudgementHelper(const vector<pair<int, int>>& indices) const
 {
-	double threshold = params.low_density_threshold*getVal(actual_map, indices[0]); // A * tau(the nondense rate)
+	double threshold = params.low_density_weight*getVal(actual_map, indices[0]); // A * tau(the nondense rate)
 	set<int> low_density_indices;
 	int B = getVal(actual_map, indices[1]), C = getVal(actual_map, indices[2]), D = getVal(actual_map, indices[3]);
 	if (abs(B) > threshold) { // |B| > tau*A
@@ -63,20 +67,56 @@ vector<pair<int, int>> HaarWaveletSampling::lowDensityJudgementHelper(const vect
 	if (abs(D) > threshold) { // |D| > tau*A
 		D > 0 ? low_density_indices.insert({ 1,2 }) : low_density_indices.insert({ 0,3 });
 	}
+    vector<int> high_density_indices, all_indices{0,1,2,3};
+    set_difference(begin(all_indices), end(all_indices), begin(low_density_indices), end(low_density_indices), 
+		inserter(high_density_indices, high_density_indices.begin()));
 
-	vector<pair<int, int>> result;
-	std::transform(low_density_indices.begin(), low_density_indices.end(), back_inserter(result), [&](int i) { return indices[i]; });
-	return result;
+	vector<pair<int, int>> low, high;
+	std::transform(low_density_indices.begin(), low_density_indices.end(), back_inserter(low), [&](int i) { return indices[i]; });
+	std::transform(high_density_indices.begin(), high_density_indices.end(), back_inserter(high), [&](int i) { return indices[i]; });
+	return vector<vector<pair<int, int>>>{ low, high };
 }
 
-void HaarWaveletSampling::convertToDensityMaps(const weak_ptr<FilteredPointSet> origin)
+bool HaarWaveletSampling::hasDiscrepancy(const std::vector<std::pair<int, int>>& indices)
 {
-	// initialization
+	int Aa = getVal(previous_assigned_maps.back(), indices[0]), Ad = getVal(actual_map, indices[0]);
+	if (Aa == 0) return true;
+	double error = 0.0;
+	for (size_t i = 1, sz = indices.size(); i < sz; ++i) {
+		error += abs(static_cast<double>(getVal(actual_map, indices[i])) / Ad 
+					 - static_cast<double>(getVal(previous_assigned_maps.back(), indices[i])) / Aa);
+	}
+	return error / 3.0 > params.epsilon;
+}
+
+void HaarWaveletSampling::initializeGrids()
+{
 	for (uint i = 0; i < horizontal_bin_num; ++i)
 		for (uint j = 0; j < vertical_bin_num; ++j)
 			screen_grids[i][j].clear();
+}
 
-	for (const auto &pr : *(origin.lock())) {
+void HaarWaveletSampling::convertToDensityMap()
+{
+	for (uint i = 0; i < side_length; ++i) {
+		for (uint j = 0; j < side_length; ++j) {
+			if (i < horizontal_bin_num && j < vertical_bin_num) {
+				actual_map[i][j] = screen_grids[i][j].size();
+				visual_map[i][j] = screen_grids[i][j].empty() ? 0 : 1;
+			}
+			else {
+				actual_map[i][j] = visual_map[i][j] = 0;
+			}
+			assigned_map[i][j] = 0;
+			update_needed_map[i][j] = false;
+		}
+	}
+}
+
+void HaarWaveletSampling::computeAssignMapsProgressively(const weak_ptr<FilteredPointSet> origin)
+{
+	int count = 0;
+	for (const auto& pr : *(origin.lock())) {
 		auto &p = pr.second;
 		if (find(selected_class_order.begin(), selected_class_order.end(), p->label) == selected_class_order.end())
 			continue;
@@ -84,20 +124,24 @@ void HaarWaveletSampling::convertToDensityMaps(const weak_ptr<FilteredPointSet> 
 			y = visual2grid(p->pos.y(), MARGIN.top);
 		auto &grid = screen_grids[x][y];
 		grid.push_back(pr.first);
-	}
+		++count;
 
-	for (uint i = 0; i < side_length; ++i) {
-		for (uint j = 0; j < side_length; ++j) {
-			if (i < horizontal_bin_num && j < vertical_bin_num) {
-				actual_map[i][j] = screen_grids[i][j].size();
-				visual_map[i][j] = screen_grids[i][j].empty() ? 0 : 1;
-				assigned_map[i][j] = 0;
-			}
-			else {
-				actual_map[i][j] = visual_map[i][j] = assigned_map[i][j] = 0;
-			}
+		if (count % params.batch == 0) {
+			++last_frame_id;
+			convertToDensityMap();
+			forwardTransform();
+			inverseTransfrom();
+
+			is_first_frame = false;
 		}
 	}
+	if (count % params.batch != 0) {
+		++last_frame_id;
+		convertToDensityMap();
+		forwardTransform();
+		inverseTransfrom();
+	}
+	last_frame_id = -1;
 }
 
 void HaarWaveletSampling::forwardTransform()
@@ -112,6 +156,8 @@ void HaarWaveletSampling::forwardTransform()
 			for (int j = 0; j < vertical_bin_num; j += shift) {
 				transformHelper(actual_map, i, j, k);
 				transformHelper(visual_map, i, j, k);
+				if (!is_first_frame)
+					transformHelper(previous_assigned_maps.back(), i, j, k);
 				//if(visual_map[i][j]!=0) output << visual_map[i][j];
 				//output << ',';
 			}
@@ -128,17 +174,21 @@ void HaarWaveletSampling::inverseTransfrom()
 	for (int shift = side_length; shift > 1; shift = k) {
 		k = shift >> 1;
 
-		//ofstream output(string("./results/test_csv/") + to_string(shift) + ".csv", ios_base::trunc);
+		//ofstream output(string("./results/test_csv/") + to_string(shift) + "_" + to_string(last_frame_id) + ".csv", ios_base::trunc);
 		for (int j = 0; j < vertical_bin_num; j += shift) {
 			for (int i = 0; i < horizontal_bin_num; i += shift) {
 				vector<pair<int, int>> indices = { { i,j },{ i + k,j },{ i,j + k },{ i + k,j + k } };
-				vector<pair<int, int>> low_density_indices = lowDensityJudgementHelper(indices);
+				auto low_high_pair = lowDensityJudgementHelper(indices);
+				vector<pair<int, int>> low_density_indices = low_high_pair[0], high_density_indices = low_high_pair[1];
+				bool update_needed = (!is_first_frame && !update_needed_map[i][j]) && hasDiscrepancy(indices), // error exceeds the bound
+					same_assigned_points = update_needed && (previous_assigned_maps.back()[i][j] == assigned_map[i][j]);
 				//if(assigned_map[i][j]>0) output << assigned_map[i][j];
 				//output << ',';
 
 				int visual_point_num = visual_map[i][j], assigned_visual_point_num = assigned_map[i][j];
 				transformHelper(actual_map, i, j, k, true);
 				transformHelper(visual_map, i, j, k, true);
+				if(!is_first_frame) transformHelper(previous_assigned_maps.back(), i, j, k, true);
 				assigned_map[i][j] = 0;
 
 				if (visual_point_num == 0) continue;
@@ -167,17 +217,29 @@ void HaarWaveletSampling::inverseTransfrom()
 					}
 
 					// calculate assigned number for low density regions intentionally
-					sort(low_density_indices.begin(), low_density_indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
-						return getVal(visual_map, a) < getVal(visual_map, b);
-					});
-					for (size_t _i = 1, sz = low_density_indices.size(); _i < sz; ++_i) {
-						int x = getVal(assigned_map, low_density_indices[_i - 1]), y = getVal(assigned_map, low_density_indices[_i]);
-						if (x == 0) continue;
+                    if(!low_density_indices.empty()) {
+                        int low_density_sum = 0, high_density_sum = 0, low_visual_sum = 0, high_visual_sum = 0, high_assigned = 0;
+                        for(auto &idx : low_density_indices) {
+                            low_density_sum += getVal(actual_map, idx);
+                            low_visual_sum += getVal(visual_map, idx);
+                        }
+                        if(low_density_sum == 0) continue;
 
-						int assigned_val = ceil((static_cast<double>(getVal(visual_map, low_density_indices[_i])) / getVal(visual_map, low_density_indices[_i - 1]) + y) / (1.0 + 1.0 / x));
-						assigned_val = min(assigned_val, getVal(visual_map, low_density_indices[_i]));
-						assigned_map[low_density_indices[_i].first][low_density_indices[_i].second] = assigned_val;
-					}
+                        for(auto &idx : high_density_indices) {
+                            high_density_sum += getVal(actual_map, idx);
+                            high_visual_sum += getVal(visual_map, idx);
+                            high_assigned += getVal(assigned_map, idx);
+                        }
+                        int low_assigned = high_assigned*((1.0 - params.low_density_weight)*low_density_sum/high_density_sum + params.low_density_weight*low_visual_sum/high_visual_sum);
+                        sort(low_density_indices.begin(), low_density_indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
+                            return getVal(visual_map, a) < getVal(visual_map, b);
+                        });
+                        for (size_t _i = 0, sz = low_density_indices.size(); _i < sz; ++_i) {
+                            int assigned_val = ceil(static_cast<double>(getVal(visual_map, low_density_indices[_i])) * low_assigned / low_density_sum);
+                            int &ref2map = assigned_map[low_density_indices[_i].first][low_density_indices[_i].second];
+                            ref2map = max(assigned_val, ref2map);
+                        }
+                    }
 				}
 				else {
 					sort(indices.begin(), indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
@@ -192,48 +254,77 @@ void HaarWaveletSampling::inverseTransfrom()
 						remain_assigned_point_num -= assigned_val;
 					}
 				}
+
+				if (update_needed) {
+					if (same_assigned_points) {
+						for (auto &idx : indices) {
+							same_assigned_points &= (getVal(previous_assigned_maps.back(), idx) == getVal(assigned_map, idx));
+						}
+					}
+					if (!same_assigned_points) {
+						for (int _i = i, e_i = i + shift - 1; _i < e_i; ++_i) {
+							for (int _j = j, e_j = j + shift - 1; _j < e_j; ++_j) {
+								update_needed_map[_i][_j] = true;
+							}
+						}
+					}
+				}
 			}
 			//output << '\n';
 		}
 
-		//if (k == end_shift) { // Gaussian smoothing
-		//	vector<vector<double>> smooth_assign_map(horizontal_bin_num);
-		//	for (int i = 0; i < horizontal_bin_num; ++i) {
-		//		smooth_assign_map[i].resize(vertical_bin_num);
-		//	}
+		if (k == end_shift) { // Gaussian smoothing
+			vector<vector<double>> smooth_assign_map(horizontal_bin_num);
+			for (int i = 0; i < horizontal_bin_num; ++i) {
+				smooth_assign_map[i].resize(vertical_bin_num);
+			}
 
-		//	const vector<vector<pair<int, int>>> offsets{
-		//		{ { -1,-1 },{ -1, 1 },{ 1,-1 },{ 1,1 } },
-		//		{ { -1, 0 },{ 0,-1 },{ 0, 1 },{ 1,0 } } };
-		//	const double share = 0.0416; // 1/24
-		//	for (int j = 0; j < vertical_bin_num; j += k) {
-		//		for (int i = 0; i < horizontal_bin_num; i += k) {
-		//			if (assigned_map[i][j] == 0) continue;
+			const vector<vector<pair<int, int>>> offsets{
+				{ { -1,-1 },{ -1, 1 },{ 1,-1 },{ 1,1 } },
+				{ { -1, 0 },{ 0,-1 },{ 0, 1 },{ 1,0 } } };
+			const double share = 0.0416; // 1/24
+			for (int j = 0; j < vertical_bin_num; j += k) {
+				for (int i = 0; i < horizontal_bin_num; i += k) {
+					if (assigned_map[i][j] == 0) continue;
 
-		//			for (int g = 0, g_sz = offsets.size(); g < g_sz; ++g) {
-		//				double i_share = (g + 1)*share*assigned_map[i][j];
-		//				for (int o = 0, o_sz = offsets[g].size(); o < o_sz; ++o) {
-		//					auto idx = make_pair(i + k*offsets[g][o].first, j + k*offsets[g][o].second);
-		//					if (idx.first > -1 && idx.first < horizontal_bin_num && idx.second > -1 && idx.second < vertical_bin_num) {
-		//						smooth_assign_map[idx.first][idx.second] += i_share;
-		//					}
-		//				}
-		//			}
-		//			smooth_assign_map[i][j] += assigned_map[i][j];
-		//		}
-		//	}
+					for (int g = 0, g_sz = offsets.size(); g < g_sz; ++g) {
+						double i_share = (g + 1)*share*assigned_map[i][j];
+						for (int o = 0, o_sz = offsets[g].size(); o < o_sz; ++o) {
+							auto idx = make_pair(i + k*offsets[g][o].first, j + k*offsets[g][o].second);
+							if (idx.first > -1 && idx.first < horizontal_bin_num && idx.second > -1 && idx.second < vertical_bin_num) {
+								smooth_assign_map[idx.first][idx.second] += i_share;
+							}
+						}
+					}
+					smooth_assign_map[i][j] += assigned_map[i][j];
+				}
+			}
 
-		//	//ofstream output("./results/test_csv/0.csv", ios_base::trunc);
-		//	for (int j = 0; j < vertical_bin_num; j += k) {
-		//		for (int i = 0; i < horizontal_bin_num; i += k) {
-		//			assigned_map[i][j] = round(smooth_assign_map[i][j]);
-		//			
-		//			//if (assigned_map[i][j]>0) output << assigned_map[i][j];
-		//			//output << ',';
-		//		}
-		//		//output << '\n';
-		//	}
-		//}
+			//ofstream output("./results/test_csv/0.csv", ios_base::trunc);
+			for (int j = 0; j < vertical_bin_num; j += k) {
+				for (int i = 0; i < horizontal_bin_num; i += k) {
+					assigned_map[i][j] = round(smooth_assign_map[i][j]);
+					
+					//if (assigned_map[i][j]>0) output << assigned_map[i][j];
+					//output << ',';
+				}
+				//output << '\n';
+			}
+		}
+	}
+
+	if (is_first_frame) {
+		previous_assigned_maps.push_back(assigned_map);
+	}
+	else {
+		DensityMap old = previous_assigned_maps.back();
+		for (uint i = 0; i < horizontal_bin_num; ++i) {
+			for (uint j = 0; j < vertical_bin_num; ++j) {
+				if (update_needed_map[i][j])
+					old[i][j] = assigned_map[i][j];
+			}
+		}
+		previous_assigned_maps.push_back(move(old));
 	}
 }
 
@@ -243,14 +334,55 @@ Indices HaarWaveletSampling::selectSeeds()
 
 	for (uint i = 0; i < horizontal_bin_num; ++i) {
 		for (uint j = 0; j < vertical_bin_num; ++j) {
-			if (assigned_map[i][j] == 1) {
-				Indices &local = screen_grids[i][j];
-				//qDebug() << i << ' ' << j;
-				std::uniform_int_distribution<> dis(0, local.size() - 1);
-				result.push_back(local[dis(gen)]);
+			if (previous_assigned_maps[params.displayed_frame_id][i][j] != 0) {
+				if (last_frame_id != -1 && previous_assigned_maps[last_frame_id][i][j] != 0) {
+					int pre_idx = previous_assigned_maps[last_frame_id][i][j] == -1 ? 0 : previous_assigned_maps[last_frame_id][i][j];
+					result.push_back(pre_idx);
+
+					previous_assigned_maps[params.displayed_frame_id][i][j] = previous_assigned_maps[last_frame_id][i][j];
+				}
+				else {
+					Indices &local = screen_grids[i][j];
+					//qDebug() << i << ' ' << j;
+					std::uniform_int_distribution<> dis(0, local.size() - 1);
+					int rand_idx = local[dis(gen)];
+					result.push_back(rand_idx);
+
+					previous_assigned_maps[params.displayed_frame_id][i][j] = rand_idx == 0 ? -1 : rand_idx;
+				}
 			}
 		}
 	}
+	last_frame_id = params.displayed_frame_id;
 	qDebug() << result.size();
 	return result;
+}
+
+pair<Indices, Indices>  HaarWaveletSampling::getSeedsWithDiff()
+{
+	Indices result, diff;
+
+	for (uint i = 0; i < horizontal_bin_num; ++i) {
+		for (uint j = 0; j < vertical_bin_num; ++j) {
+			if (previous_assigned_maps[params.displayed_frame_id][i][j] != 0) {
+				if (last_frame_id != -1 && previous_assigned_maps[last_frame_id][i][j] != 0) {
+					int pre_idx = previous_assigned_maps[last_frame_id][i][j] == -1 ? 0 : previous_assigned_maps[last_frame_id][i][j];
+					result.push_back(pre_idx);
+
+					previous_assigned_maps[params.displayed_frame_id][i][j] = previous_assigned_maps[last_frame_id][i][j];
+				}
+				else {
+					Indices &local = screen_grids[i][j];
+					//qDebug() << i << ' ' << j;
+					std::uniform_int_distribution<> dis(0, local.size() - 1);
+					int rand_idx = local[dis(gen)];
+					diff.push_back(rand_idx);
+
+					previous_assigned_maps[params.displayed_frame_id][i][j] = rand_idx == 0 ? -1 : rand_idx;
+				}
+			}
+		}
+	}
+	last_frame_id = params.displayed_frame_id;
+	return make_pair(result, diff);
 }
