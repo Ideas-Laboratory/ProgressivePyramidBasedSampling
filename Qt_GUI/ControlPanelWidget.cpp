@@ -2,7 +2,8 @@
 
 using namespace std;
 
-ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet * points, unordered_map<uint, string>* class2label, QWidget * parent) : QWidget(parent), points(points), class2label(class2label), viewer(viewer)
+ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, unordered_map<uint, string>* class2label, QWidget * parent)
+	: QWidget(parent), class2label(class2label), viewer(viewer)
 {
 	QVBoxLayout* layout = new QVBoxLayout(this);
 	setLayout(layout);
@@ -58,8 +59,8 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 		spin_frame_id->setValue(params.displayed_frame_id + 1);
 		connect(spin_frame_id, QOverload<int>::of(&QSpinBox::valueChanged),
 			[](int value) { params.displayed_frame_id = value - 1; });
-		connect(viewer, &SamplingProcessViewer::inputImageChanged, [spin_frame_id](uint pointNum) {
-			auto &result = div((int)pointNum, params.batch);
+		connect(viewer, &SamplingProcessViewer::finished, [this, spin_frame_id]() {
+			auto &result = div((int)this->viewer->getPointNum(), params.batch);
 			spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
 		});
 
@@ -168,20 +169,18 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, PointSet 
 			return;
 
 		save_CSV->setEnabled(false);
-		showCurrentFileName(QFileInfo(path).fileName());
+		QString fn = QFileInfo(path).fileName();
+		showCurrentFileName(fn);
 		this->class2label->clear();
-		delete this->points;
 
-		this->points = readDataset(path.toStdString(), this->class2label);
-		this->viewer->setDataset(this->points);
+		this->viewer->setDataName(fn.split('.').front().toStdString());
+		this->viewer->setDataSource(path.toStdString());
 		this->addClassSelectionBox();
 	});
 	connect(save_PNG, &QPushButton::pressed, [this]() { showSaveDialog("Save Image as PNG", "PNG Image", "png", [this](const QString& path) { this->viewer->saveImagePNG(path); }); });
 	connect(save_SVG, &QPushButton::pressed, [this]() { showSaveDialog("Save Image as SVG", "SVG Image", "svg", [this](const QString& path) { this->viewer->saveImageSVG(path); }); });
 	connect(save_PDF, &QPushButton::pressed, [this]() { showSaveDialog("Save Image as PDF", "PDF", "pdf", [this](const QString& path) { this->viewer->saveImagePDF(path); }); });
-	connect(save_CSV, &QPushButton::pressed, [this]() { showSaveDialog("Save Image as CSV", "Comma-Separated Values Files", "csv", [this](const QString& path) {
-		writeDataset(path.toStdString(), *(this->points), *(this->class2label), this->viewer->getSeleted());
-	}); });
+	connect(save_CSV, &QPushButton::pressed, [this]() { showSaveDialog("Save Image as CSV", "Comma-Separated Values Files", "csv", [this](const QString& path) { this->viewer->writeResult(path); }); });
 	connect(viewer, &SamplingProcessViewer::finished, [this]() {
 		this->enableButtons();
 		this->viewer->setAttribute(Qt::WA_TransparentForMouseEvents, false);

@@ -9,7 +9,7 @@
 //constants
 #define MY_DATASET_FILENAME "./data/synthesis1.csv"
 
-const static int CANVAS_WIDTH = 900; //1600;//316;//1080; //720; //480; 
+const static int CANVAS_WIDTH = 1600;//316;//1080; //720; //480; 
 const static int CANVAS_HEIGHT = 900;//316;//810; //540; //360; 
 
 const static struct {
@@ -29,6 +29,7 @@ struct LabeledPoint
 	LabeledPoint(const std::unique_ptr<LabeledPoint>& p) : pos(p->pos), label(p->label) {}
 };
 typedef std::vector<std::unique_ptr<LabeledPoint>> PointSet;
+typedef std::vector<LabeledPoint*> TempPointSet;
 
 typedef std::unordered_map<uint, std::unique_ptr<LabeledPoint>> FilteredPointSet;
 
@@ -39,8 +40,6 @@ struct Extent {
 	qreal y_max;
 };
 
-typedef std::vector<uint> Indices;
-
 struct Box {
 	int left;
 	int top;
@@ -48,12 +47,6 @@ struct Box {
 	int bottom;
 	Box() {}
 	Box(int left, int top, int right, int bottom) :left(left), top(top), right(right), bottom(bottom) {}
-};
-
-struct MinGrid {
-	Box b;
-	Indices contents;
-	MinGrid(int l, int t) : b(l,t,l+1,t+1) {}
 };
 
 // total number and number of each class

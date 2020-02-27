@@ -18,11 +18,13 @@ public:
 	HaarWaveletSampling(const QRect& bounding_rect);
 
 	/* main function that contains the framework */
-	Indices execute(const std::weak_ptr<FilteredPointSet> origin);
+	std::pair<TempPointSet, TempPointSet> execute(const std::weak_ptr<FilteredPointSet> origin, bool is_first_frame);
 
-	Indices selectSeeds();
-	std::pair<Indices, Indices> getSeedsWithDiff();
+	PointSet selectSeeds();
+	std::pair<TempPointSet, TempPointSet> getSeedsDifference();
+	std::pair<TempPointSet, TempPointSet> getSeedsWithDiff();
 
+	int getFrameID() { return last_frame_id; }
 	uint getSideLength() { return side_length; }
 	void setEndShift(int shift) { end_shift = shift; }
 
@@ -38,7 +40,7 @@ private:
 	void forwardTransform();
 	void inverseTransfrom();
 	
-	std::vector<std::vector<Indices>> screen_grids;
+	std::vector<std::vector<std::unique_ptr<LabeledPoint>>> elected_points;
 
 	DensityMap actual_map;
 	DensityMap visual_map;
@@ -46,6 +48,7 @@ private:
 
 	std::vector<DensityMap> previous_assigned_maps;
 	std::vector<std::vector<bool>> update_needed_map;
+	std::vector<std::pair<int, int>> added, removed;
 	bool is_first_frame;
 	int last_frame_id;
 
@@ -56,6 +59,7 @@ private:
 	int end_shift;
 
 	std::mt19937 gen{ std::random_device{}() };
+	std::uniform_real_distribution<> double_dist;
 };
 
 inline int visual2grid(qreal pos, qreal margin)

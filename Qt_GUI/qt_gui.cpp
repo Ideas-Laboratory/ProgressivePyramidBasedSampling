@@ -6,11 +6,10 @@ Qt_GUI::Qt_GUI(QWidget *parent)
 	ui.setupUi(this);
 	
 	class2label = new std::unordered_map<uint, std::string>();
-	points = readDataset(MY_DATASET_FILENAME, class2label); // read from file
-
+	
 	layout()->setSizeConstraint(QLayout::SetFixedSize);
 
-	viewer = new SamplingProcessViewer(points, this);
+	viewer = new SamplingProcessViewer("synthesis1", class2label, this);
 	viewer->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 
 	setCentralWidget(viewer);
@@ -19,7 +18,7 @@ Qt_GUI::Qt_GUI(QWidget *parent)
 	dock_widget->setFeatures(QDockWidget::NoDockWidgetFeatures);
 	addDockWidget(Qt::LeftDockWidgetArea, dock_widget);
 
-	ControlPanelWidget* cp = new ControlPanelWidget(viewer, points, class2label, dock_widget);
+	ControlPanelWidget* cp = new ControlPanelWidget(viewer, class2label, dock_widget);
 	dock_widget->setWidget(cp);
 
 	QDockWidget* display_dock_widget = new QDockWidget("Display Panel", this);
