@@ -7,18 +7,17 @@
 class ControlPanelWidget : public QWidget
 {
 public:
-	explicit ControlPanelWidget(SamplingProcessViewer* viewer, std::unordered_map<uint, std::string>* class2label, QWidget* parent = nullptr);
+	explicit ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* parent = nullptr);
 
 private:
 	void showSaveDialog(const std::string& caption, const std::string& filter_desc, const std::string& ext, std::function<void(const QString&)> doSomeStuff);
-	void addClassSelectionBox();
+	void addClassSelectionBox(const std::unordered_map<uint, std::string>* class2label);
 	void showCurrentFileName(const QString& s);
 	void disableButtons();
 	void enableButtons();
 	
 	SamplingProcessViewer* viewer;
 
-	std::unordered_map<uint, std::string>* class2label;
 	std::unordered_map<std::string, uint> label2class;
 
 	std::vector<QPushButton*> buttons;

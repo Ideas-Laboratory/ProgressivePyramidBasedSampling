@@ -2,31 +2,12 @@
 
 using namespace std;
 
-const static vector<uint> power_2 = { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 };
-
-BinningTree::BinningTree(const shared_ptr<FilteredPointSet> origin, const QRect& bounding_rect)
-	: dataset(origin), horizontal_bin_num(bounding_rect.width() / params.grid_width + 1), vertical_bin_num(bounding_rect.height() / params.grid_width + 1), margin_left(bounding_rect.left()), margin_top(bounding_rect.top())
+BinningTree::BinningTree(const FilteredPointSet* origin, const QRect& bounding_rect)
+	: horizontal_bin_num(bounding_rect.width() / params.grid_width + 1), vertical_bin_num(bounding_rect.height() / params.grid_width + 1), margin_left(bounding_rect.left()), margin_top(bounding_rect.top())
 {
 	// create all min grids
-	vector<weak_ptr<MinGrid>> vec;
-	for (auto &pr : *origin) {
-		auto &p = pr.second;
-		int x = visual2grid(p->pos.x(), margin_left),
-			y = visual2grid(p->pos.y(), margin_top);
-		auto &pos = make_pair(x, y);
-		if (min_grids.find(pos) == min_grids.end()) {
-			min_grids[pos] = make_shared<MinGrid>(x, y);
-			vec.push_back(min_grids[pos]);
-		}
-		min_grids[pos]->contents.push_back(pr.first);
-	}
-	vec.shrink_to_fit();
-	StatisticalInfo info = countStatisticalInfo(vec);
-
-	// create root of the tree
-	Box root_bin(0, 0, horizontal_bin_num, vertical_bin_num);
-	uint side = max(*lower_bound(power_2.begin(), power_2.end(), horizontal_bin_num), *lower_bound(power_2.begin(), power_2.end(), vertical_bin_num)) / 2;
-	root = make_shared<BinningTreeNode>(move(root_bin), QPoint(horizontal_bin_num / 2, vertical_bin_num / 2), side, move(vec), move(info), weak_ptr<BinningTreeNode>());
+	dataset = make_unique<FilteredPointSet>();
+	updateMinGrids(origin);
 }
 
 bool BinningTree::split(std::shared_ptr<BinningTreeNode> node)
@@ -34,39 +15,109 @@ bool BinningTree::split(std::shared_ptr<BinningTreeNode> node)
 	if (node->min_grids_inside.size() < 2)
 		return false;
 
-	vector<vector<weak_ptr<MinGrid>>> children_vec(4);
+	double x_sum = 0.0, y_sum = 0.0;
+	uint x_min = -1, y_min = -1, x_max = 0, y_max = 0;
 	for (auto ptr : node->min_grids_inside) {
-		auto g = ptr.lock();
-		int i = (g->b.left < node->split_pos.x() ? 0 : 1) | (g->b.top < node->split_pos.y() ? 0 : 2);
-		children_vec[i].push_back(g);
+		auto s_ptr = ptr.lock();
+		x_sum += s_ptr->left * s_ptr->contents.size();
+		y_sum += s_ptr->top * s_ptr->contents.size();
+		x_min = min(x_min, s_ptr->left);
+		y_min = min(y_min, s_ptr->top);
+		x_max = max(x_max, s_ptr->left);
+		y_max = max(y_max, s_ptr->top);
+	}
+	uint split_width = (uint)ceil(x_sum / node->info.total_num - node->b.left), split_height = (uint)ceil(y_sum / node->info.total_num - node->b.top);
+	uint x_split = split_width + node->b.left, y_split = split_height + node->b.top;
+
+	vector<weak_ptr<MinGrid>> child1_vec, child2_vec;
+	if ((x_max - x_min) > (y_max-y_min) && splitHelper(node, [=](shared_ptr<MinGrid> ptr) { return ptr->left < x_split; }, &child1_vec, &child2_vec)) { // horizontal split
+		node->child1 = make_shared<BinningTreeNode>(move(Box(node->b.left, node->b.top, split_width, node->b.height)), move(child1_vec), countStatisticalInfo(child1_vec), node);
+		node->child2 = make_shared<BinningTreeNode>(move(Box(x_split, node->b.top, node->b.width - split_width, node->b.height)), move(child2_vec), countStatisticalInfo(child2_vec), node);
+	}
+	else if (splitHelper(node, [=](shared_ptr<MinGrid> ptr) { return ptr->top < y_split; }, &child1_vec, &child2_vec)) { // vertical split
+		node->child1 = make_shared<BinningTreeNode>(move(Box(node->b.left, node->b.top, node->b.width, split_height)), move(child1_vec), countStatisticalInfo(child1_vec), node);
+		node->child2 = make_shared<BinningTreeNode>(move(Box(node->b.left, y_split, node->b.width, node->b.height - split_height)), move(child2_vec), countStatisticalInfo(child2_vec), node);
+	}
+	else {
+		return false;
+	}
+	return true;
+}
+
+bool BinningTree::split_new(std::shared_ptr<BinningTreeNode> node)
+{
+	if (node->min_grids_inside.size() < 2)
+		return false;
+
+	double x_sum = 0.0, y_sum = 0.0;
+	for (auto ptr : node->min_grids_inside) {
+		auto s_ptr = ptr.lock();
+		x_sum += s_ptr->left * s_ptr->contents.size();
+		y_sum += s_ptr->top * s_ptr->contents.size();
+	}
+	uint split_width = (uint)floor(x_sum / node->info.total_num - node->b.left), split_height = (uint)floor(y_sum / node->info.total_num - node->b.top);
+	uint x_split = split_width + node->b.left, y_split = split_height + node->b.top;
+
+	// find best splitting line
+	int x_split_left_sum = 0, x_split_middle_sum = 0, x_split_right_sum = 0, y_split_left_sum = 0, y_split_middle_sum = 0, y_split_right_sum = 0;
+	for (auto ptr : node->min_grids_inside) {
+		auto s_ptr = ptr.lock();
+		if (s_ptr->left < x_split)
+			x_split_left_sum += s_ptr->contents.size();
+		else if (s_ptr->left == x_split)
+			x_split_middle_sum += s_ptr->contents.size();
+		else
+			x_split_right_sum += s_ptr->contents.size();
+		if (s_ptr->top < y_split)
+			y_split_left_sum += s_ptr->contents.size();
+		else if (s_ptr->top == y_split)
+			y_split_middle_sum += s_ptr->contents.size();
+		else
+			y_split_right_sum += s_ptr->contents.size();
+	}
+	int x_diff = abs(x_split_left_sum - x_split_middle_sum - x_split_right_sum), y_diff = abs(y_split_left_sum - y_split_middle_sum - y_split_right_sum),
+		x_diff2 = abs(x_split_left_sum + x_split_middle_sum - x_split_right_sum), y_diff2 = abs(y_split_left_sum + y_split_middle_sum - y_split_right_sum);
+	if (x_diff > x_diff2) {
+		++split_width;
+		++x_split;
+		x_diff = x_diff2;
+	}
+	if (y_diff > y_diff2) {
+		++split_height;
+		++y_split;
+		y_diff = y_diff2;
 	}
 
-	uint side = node->child_side / 2;
-	for (int i = 0; i < node->child_num; ++i) {
-		Box b;
-		QPoint split_pos;
-		if (i & 1) { // right nodes
-			b.left = node->split_pos.x();
-			b.right = max(b.left, node->b.right);
-			split_pos.setX(node->split_pos.x() + side);
-		}
-		else { // left nodes
-			b.right = node->split_pos.x();
-			b.left = min(node->b.left, b.right);
-			split_pos.setX(node->split_pos.x() - side);
-		}
-		if (i & 2) { // bottom nodes
-			b.top = node->split_pos.y();
-			b.bottom = max(b.top, node->b.bottom);
-			split_pos.setY(node->split_pos.y() + side);
-		}
-		else { // top nodes
-			b.bottom = node->split_pos.y();
-			b.top = min(node->b.top, b.bottom);
-			split_pos.setY(node->split_pos.y() - side);
-		}
-		node->children[i] = make_shared<BinningTreeNode>(move(b), move(split_pos), side, move(children_vec[i]), countStatisticalInfo(children_vec[i]), node);
+	vector<weak_ptr<MinGrid>> child1_vec, child2_vec;
+	if ((x_diff < y_diff) && splitHelper(node, [=](shared_ptr<MinGrid> ptr) { return ptr->left < x_split; }, &child1_vec, &child2_vec)) { // horizontal split
+		node->child1 = make_shared<BinningTreeNode>(move(Box(node->b.left, node->b.top, split_width, node->b.height)), move(child1_vec), countStatisticalInfo(child1_vec), node);
+		node->child2 = make_shared<BinningTreeNode>(move(Box(x_split, node->b.top, node->b.width - split_width, node->b.height)), move(child2_vec), countStatisticalInfo(child2_vec), node);
 	}
+	else if (splitHelper(node, [=](shared_ptr<MinGrid> ptr) { return  ptr->top < y_split; }, &child1_vec, &child2_vec)) { // vertical split
+		node->child1 = make_shared<BinningTreeNode>(move(Box(node->b.left, node->b.top, node->b.width, split_height)), move(child1_vec), countStatisticalInfo(child1_vec), node);
+		node->child2 = make_shared<BinningTreeNode>(move(Box(node->b.left, y_split, node->b.width, node->b.height - split_height)), move(child2_vec), countStatisticalInfo(child2_vec), node);
+	}
+	else {
+		return false;
+	}
+	return true;
+}
+
+bool BinningTree::splitHelper(shared_ptr<BinningTreeNode> node, function<bool(shared_ptr<MinGrid>)> comp, vector<weak_ptr<MinGrid>> *child1_vec, vector<weak_ptr<MinGrid>> *child2_vec)
+{
+	child1_vec->clear();
+	child2_vec->clear();
+
+	for (auto ptr : node->min_grids_inside) {
+		auto s_ptr = ptr.lock();
+		if (comp(s_ptr))
+			child1_vec->push_back(ptr);
+		else
+			child2_vec->push_back(ptr);
+	}
+	if(child1_vec->empty() || child2_vec->empty())
+		return false;
+
 	return true;
 }
 
@@ -74,9 +125,7 @@ uint BinningTree::selectSeedIndex(shared_ptr<BinningTreeNode> node)
 {
 	vector<uint> indices;
 	for (auto &b : node->min_grids_inside) {
-		for (uint i : b.lock()->contents) {
-			indices.push_back(i);
-		}
+		indices.push_back(b.lock()->contents.front());
 	}
 
 	node->seed_index = indices[rand() % indices.size()];
@@ -87,11 +136,12 @@ uint BinningTree::selectSeedIndex(shared_ptr<BinningTreeNode> node, uint label)
 {
 	vector<uint> indices;
 	for (auto &b : node->min_grids_inside) {
-		for (uint i : b.lock()->contents) {
-			if (dataset->at(i)->label == label) {
-				indices.push_back(i);
-			}
-		}
+		//for (uint i : b.lock()->contents) {
+		//	if (dataset->at(i)->label == label) {
+		//		indices.push_back(i);
+		//	}
+		//}
+		indices.push_back(b.lock()->contents.front());
 	}
 
 	node->seed_index = indices[rand() % indices.size()];
@@ -100,24 +150,9 @@ uint BinningTree::selectSeedIndex(shared_ptr<BinningTreeNode> node, uint label)
 
 void BinningTree::updateLeafNum(shared_ptr<BinningTreeNode> node)
 {
-	node->leaf_num_inside = accumulate(node->children.begin(), node->children.end(), (uint)0, [](uint a, shared_ptr<BinningTreeNode> b) { return a + b->getLeafNum(); });
+	node->leaf_num_inside = node->child1->leaf_num_inside + node->child2->leaf_num_inside;
 }
 
-void BinningTree::determineSplittingChildren(std::shared_ptr<BinningTreeNode> node, std::vector<bool>& ss, double threshold)
-{
-	double min_sr = DBL_MAX;
-	for (int i = 0; i < node->child_num; ++i) {
-		if (node->children[i]->leaf_num_inside == 0) {
-			ss[i] = false;
-		}
-		else {
-			double child_sampling_ratio = (double)node->children[i]->leaf_num_inside / node->children[i]->info.total_num, sampling_ratio = (double)node->leaf_num_inside / node->info.total_num;
-			ss[i] = child_sampling_ratio - sampling_ratio < threshold;
-		}
-	}
-}
-
-/*
 NodeWithQuota BinningTree::backtrack(shared_ptr<BinningTreeNode> leaf, uint max_depth)
 {
 	if (leaf->info.class_point_num.size() == 1) // only 1 class in the bin
@@ -160,6 +195,37 @@ NodeWithQuota BinningTree::backtrack(shared_ptr<BinningTreeNode> leaf, uint max_
 		}
 	}
 	return result;
+}
+
+void BinningTree::updateMinGrids(const FilteredPointSet * origin)
+{
+	vector<weak_ptr<MinGrid>> vec;
+	for (auto &pr : min_grids) {
+		vec.push_back(pr.second);
+	}
+	for (auto &pr : *origin) {
+		auto &p = pr.second;
+		int x = visual2grid(p->pos.x(), margin_left),
+			y = visual2grid(p->pos.y(), margin_top);
+		auto &pos = make_pair(x, y);
+		if (min_grids.find(pos) == min_grids.end()) {
+			min_grids[pos] = make_shared<MinGrid>(x, y);
+			vec.push_back(min_grids[pos]);
+			dataset->emplace(pr.first, make_unique<LabeledPoint>(pr.second)); // when selecting seeds, the position is always the first one in *contents*
+		}
+		else if (double_dist(gen) < 0.1) {
+			dataset->at(min_grids[pos]->contents.front())->label = pr.second->label;
+		}
+		min_grids[pos]->contents.push_back(pr.first);
+		++grid_infos[pos].total_num;
+		++grid_infos[pos].class_point_num[p->label];
+	}
+	vec.shrink_to_fit();
+	StatisticalInfo info = countStatisticalInfo(vec);
+
+	// create root of the tree
+	Box root_bin(0, 0, horizontal_bin_num, vertical_bin_num);
+	root = make_shared<BinningTreeNode>(move(root_bin), move(vec), move(info), weak_ptr<BinningTreeNode>());
 }
 
 void BinningTree::fillQuota(uint remaining_leaf_num, const unordered_map<uint, size_t> &label_point_map, unordered_map<uint, size_t>& quota, const function<size_t(uint)>& getAmount)
@@ -279,16 +345,15 @@ void BinningTree::splitQuota(const NodeWithQuota& node, vector<NodeWithQuota>* l
 
 	splitQuota(make_pair(another, another_quato), leaves);
 }
-*/
 
 StatisticalInfo BinningTree::countStatisticalInfo(const vector<weak_ptr<MinGrid>>& vec)
 {
 	StatisticalInfo result;
 	for (auto ptr : vec) {
-		auto &c = ptr.lock()->contents;
-		result.total_num += c.size();
-		for (auto i : c) {
-			++result.class_point_num[dataset->at(i)->label];
+		auto idx = make_pair(ptr.lock()->left, ptr.lock()->top);
+		result.total_num += grid_infos[idx].total_num;
+		for (auto &pr : grid_infos[idx].class_point_num) {
+			result.class_point_num[pr.first] += pr.second;
 		}
 	}
 	return result;

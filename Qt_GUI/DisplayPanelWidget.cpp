@@ -2,7 +2,7 @@
 
 using namespace std;
 
-DisplayPanelWidget::DisplayPanelWidget(SamplingProcessViewer *spv, unordered_map<uint, string> *c2l_mapping, QWidget * parent) : QWidget(parent), viewer(spv), class2label(c2l_mapping)
+DisplayPanelWidget::DisplayPanelWidget(SamplingProcessViewer *spv, QWidget * parent) : QWidget(parent), viewer(spv)
 {
 	setFixedWidth(440);
 	container = dynamic_cast<QScrollArea*>(parent);
@@ -11,11 +11,9 @@ DisplayPanelWidget::DisplayPanelWidget(SamplingProcessViewer *spv, unordered_map
 	layout->setAlignment(Qt::AlignTop);
 	setLayout(layout);
 
-	addClassToColorMappingTable();
-
-	connect(spv, &SamplingProcessViewer::inputImageChanged, [this]() {
+	connect(spv, &SamplingProcessViewer::classChanged, [this](const std::unordered_map<uint, std::string>* class2label) {
 		clearAllChildren();
-		addClassToColorMappingTable();
+		addClassToColorMappingTable(class2label);
 	});
 	connect(spv, &SamplingProcessViewer::adjustmentStart, [this]() {
 		removeSpecifiedChildren([](QWidget* w) { return w->objectName() == "o"; });
@@ -37,7 +35,7 @@ void DisplayPanelWidget::resizeEvent(QResizeEvent * e)
 	container->verticalScrollBar()->setValue(height());
 }
 
-void DisplayPanelWidget::addClassToColorMappingTable()
+void DisplayPanelWidget::addClassToColorMappingTable(const std::unordered_map<uint, std::string>* class2label)
 {
 	QGroupBox *mapping_box = new QGroupBox("Class to Color mapping:", this);
 	QVBoxLayout *box_layout = new QVBoxLayout(mapping_box);

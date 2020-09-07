@@ -2,8 +2,7 @@
 
 using namespace std;
 
-ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, unordered_map<uint, string>* class2label, QWidget * parent)
-	: QWidget(parent), class2label(class2label), viewer(viewer)
+ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, QWidget * parent) : QWidget(parent), viewer(viewer)
 {
 	QVBoxLayout* layout = new QVBoxLayout(this);
 	setLayout(layout);
@@ -60,9 +59,11 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, unordered
 		connect(spin_frame_id, QOverload<int>::of(&QSpinBox::valueChanged),
 			[](int value) { params.displayed_frame_id = value - 1; });
 		connect(viewer, &SamplingProcessViewer::finished, [this, spin_frame_id]() {
-			auto &result = div((int)this->viewer->getPointNum(), params.batch);
-			spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
+			//auto &result = div((int)this->viewer->getPointNum(), params.batch);
+			//spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
+			spin_frame_id->setMaximum(20);
 		});
+		connect(viewer, &SamplingProcessViewer::frameChanged, spin_frame_id, &QSpinBox::setValue);
 
 		QLabel* batch_label = new QLabel("Batch size:", this);
 		QSpinBox* spin_batch = new QSpinBox(this);
@@ -159,8 +160,6 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, unordered
 		layout->addWidget(fn_group);
 	}
 
-	addClassSelectionBox();
-
 	connect(fileButton, &QPushButton::pressed, [this, save_CSV]() {
 		QString path = QFileDialog::getOpenFileName(this, tr("Open Dataset"), QString(),
 			tr("Comma-Separated Values Files (*.csv)"));
@@ -171,11 +170,9 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, unordered
 		save_CSV->setEnabled(false);
 		QString fn = QFileInfo(path).fileName();
 		showCurrentFileName(fn);
-		this->class2label->clear();
 
 		this->viewer->setDataName(fn.split('.').front().toStdString());
 		this->viewer->setDataSource(path.toStdString());
-		this->addClassSelectionBox();
 	});
 	connect(save_PNG, &QPushButton::pressed, [this]() { showSaveDialog("Save Image as PNG", "PNG Image", "png", [this](const QString& path) { this->viewer->saveImagePNG(path); }); });
 	connect(save_SVG, &QPushButton::pressed, [this]() { showSaveDialog("Save Image as SVG", "SVG Image", "svg", [this](const QString& path) { this->viewer->saveImageSVG(path); }); });
@@ -192,9 +189,12 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, unordered
 	connect(showButton, &QPushButton::released, [this]() {
 		this->viewer->redrawPoints();
 	});
+	connect(viewer, &SamplingProcessViewer::classChanged, [this](const std::unordered_map<uint, std::string>* class2label) {
+		this->addClassSelectionBox(class2label);
+	});
 }
 
-void ControlPanelWidget::addClassSelectionBox()
+void ControlPanelWidget::addClassSelectionBox(const std::unordered_map<uint, std::string>* class2label)
 {
 	if (class_selection_box) {
 		class_selection_box->close();

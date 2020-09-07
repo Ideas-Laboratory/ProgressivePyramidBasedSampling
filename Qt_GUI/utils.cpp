@@ -31,7 +31,8 @@ PointSet * readDataSource(ifstream& input, unordered_map<uint, string>* class2la
 		getline(input, value);
 
 		if (label2class.find(value) == label2class.end()) { // mapping label (string) to class (unsigned int)
-			label2class[value] = label2class.size();
+			auto sz = label2class.size();
+			label2class[value] = sz;
 			class2label->emplace(label2class[value], value);
 		}
 		points->push_back(make_unique<LabeledPoint>(x, y, label2class[value]));
@@ -41,27 +42,27 @@ PointSet * readDataSource(ifstream& input, unordered_map<uint, string>* class2la
 	return points;
 }
 
-shared_ptr<FilteredPointSet> filter(const PointSet * points, const Extent& ext, uint pos)
+FilteredPointSet* filter(PointSet * points, const Extent& ext, uint pos)
 {
-	auto copy = make_shared<FilteredPointSet>();
+	auto copy = new FilteredPointSet();
 	for (uint i = 0, sz = points->size(); i < sz; ++i) {
 		auto &p = points->at(i);
 		if (p->pos.x() > ext.x_min && p->pos.x() < ext.x_max && p->pos.y() > ext.y_min && p->pos.y() < ext.y_max &&
 			std::find(selected_class_order.begin(), selected_class_order.end(), p->label) != selected_class_order.end()) {
-			copy->insert(make_pair(pos + i, make_unique<LabeledPoint>(p)));
+			copy->insert(make_pair(pos + i, move(p)));
 		}
 	}
 	return copy;
 }
 
-void linearScale(shared_ptr<FilteredPointSet> points, const Extent& real_extent, double lower, double upper)
+void linearScale(FilteredPointSet* points, const Extent& real_extent, double lower, double upper)
 {
 	auto scale = [=](double val, double oldLower, double oldUpper) { return linearScale(val, oldLower, oldUpper, lower, upper); };
 
 	linearScale(points, real_extent, scale, scale);
 }
 
-void linearScale(shared_ptr<FilteredPointSet> points, const Extent& real_extent, int left, int right, int top, int bottom)
+void linearScale(FilteredPointSet* points, const Extent& real_extent, int left, int right, int top, int bottom)
 {
 	auto horizontalScale = [=](double val, double oldLower, double oldUpper) { return linearScale(val, oldLower, oldUpper, left, right); };
 	auto verticalScale = [=](double val, double oldLower, double oldUpper) { return linearScale(val, oldLower, oldUpper, bottom, top); };
@@ -69,7 +70,7 @@ void linearScale(shared_ptr<FilteredPointSet> points, const Extent& real_extent,
 	linearScale(points, real_extent, horizontalScale, verticalScale);
 }
 
-void linearScale(shared_ptr<FilteredPointSet> points, const Extent & real_extent, const Extent & target_extent)
+void linearScale(FilteredPointSet* points, const Extent & real_extent, const Extent & target_extent)
 {
 	auto horizontalScale = [=](double val, double oldLower, double oldUpper) { return linearScale(val, oldLower, oldUpper, target_extent.x_min, target_extent.x_max); };
 	auto verticalScale = [=](double val, double oldLower, double oldUpper) { return linearScale(val, oldLower, oldUpper, target_extent.y_max, target_extent.y_min); };
@@ -77,7 +78,7 @@ void linearScale(shared_ptr<FilteredPointSet> points, const Extent & real_extent
 	linearScale(points, real_extent, horizontalScale, verticalScale);
 }
 
-void linearScale(shared_ptr<FilteredPointSet> points, const Extent& real_extent, std::function<double(double, double, double)> horizontalScale, std::function<double(double, double, double)> verticalScale)
+void linearScale(FilteredPointSet* points, const Extent& real_extent, std::function<double(double, double, double)> horizontalScale, std::function<double(double, double, double)> verticalScale)
 {
 	auto xScale = [=](double val) { return horizontalScale(val, real_extent.x_min, real_extent.x_max); };
 	auto yScale = [=](double val) { return verticalScale(val, real_extent.y_min, real_extent.y_max); };

@@ -18,7 +18,7 @@ Qt_GUI::Qt_GUI(QWidget *parent)
 	dock_widget->setFeatures(QDockWidget::NoDockWidgetFeatures);
 	addDockWidget(Qt::LeftDockWidgetArea, dock_widget);
 
-	ControlPanelWidget* cp = new ControlPanelWidget(viewer, class2label, dock_widget);
+	ControlPanelWidget* cp = new ControlPanelWidget(viewer, dock_widget);
 	dock_widget->setWidget(cp);
 
 	QDockWidget* display_dock_widget = new QDockWidget("Display Panel", this);
@@ -26,7 +26,7 @@ Qt_GUI::Qt_GUI(QWidget *parent)
 	addDockWidget(Qt::RightDockWidgetArea, display_dock_widget);
 
 	QScrollArea *sa = new QScrollArea(display_dock_widget);
-	DisplayPanelWidget* dp = new DisplayPanelWidget(viewer, class2label, sa);
+	DisplayPanelWidget* dp = new DisplayPanelWidget(viewer, sa);
 	sa->setWidget(dp);
 	sa->setWidgetResizable(true);
 	sa->setFixedWidth(470);
@@ -50,4 +50,6 @@ Qt_GUI::Qt_GUI(QWidget *parent)
 	setWindowTitle(viewer->ALGORITHM_NAME.c_str());
 	//set position on screen
 	move(200, 200);
+
+	emit viewer->classChanged(class2label);
 }

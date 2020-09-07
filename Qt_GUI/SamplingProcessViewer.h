@@ -1,16 +1,15 @@
 #pragma once
 
-#include <queue>
-
+#include <QThread>
 #include <QGraphicsView>
 #include <QMouseEvent>
 #include <QInputDialog>
 
 #include "global.h"
 #include "utils.h"
-#include "HaarWaveletSampling.h"
+#include "samplingworker.hpp"
 
-#define CLASS_NUM 30
+#define CLASS_NUM 20
 
 class SamplingProcessViewer : public QGraphicsView
 {
@@ -18,6 +17,7 @@ class SamplingProcessViewer : public QGraphicsView
 
 public:
 	SamplingProcessViewer(std::string&& data_name, std::unordered_map<uint, std::string>* class2label, QWidget* parent);
+	~SamplingProcessViewer() { workerThread.quit(); workerThread.wait(); }
 	void setDataName(std::string&& dn) { data_name = dn; }
 	void setDataSource(std::string&& data_path);
 	void gridWidthChanged(bool changed) { grid_width_changed = changed; }
@@ -33,10 +33,17 @@ public:
 	void saveImagePDF(const QString& path);
 	void writeResult(const QString& path);
 
-	size_t getPointNum() { return point_count; }
+	uint getPointNum() { return sw.getPointCount(); }
 	const std::vector<QBrush>& getColorBrushes() { return color_brushes; }
 
 	const std::string ALGORITHM_NAME = "Progressive Sampling for Scatterplots";
+
+public slots:
+	void drawPointsProgressively(FilteredPointSet* points); // for virtual scene
+	void drawSelectedPointsProgressively(std::pair<TempPointSet, TempPointSet>* removed_n_added); // for this scene
+	void drawSelectedPointDiffsProgressively(std::pair<TempPointSet, TempPointSet>* removed_n_added);
+	void generateFiles(int frame_id);
+	void updateClassInfo();
 
 signals:
 	void finished();
@@ -47,6 +54,8 @@ signals:
 	void iterationStatus(int iteration, int numberPoints, int splits);
 	void areaCounted(StatisticalInfo* total_info, StatisticalInfo* sample_info);
 	void pointSelected(uint index, uint class_);
+	void classChanged(const std::unordered_map<uint, std::string>* class2label);
+	void frameChanged(int frame_id);
 
 protected:
 	void mousePressEvent(QMouseEvent *me);
@@ -54,8 +63,6 @@ protected:
 	void mouseReleaseEvent(QMouseEvent *me);
 
 private:
-	void drawPointProgressively(const std::shared_ptr<FilteredPointSet>& points); // for virtual scene
-	void drawPointProgressively(std::pair<TempPointSet, TempPointSet>& removed_n_added); // for this scene
 	void drawPointByClass(TempPointSet& selected = TempPointSet());
 	void drawPointRandomly(TempPointSet& selected = TempPointSet());
 	void drawPointsByPair(std::pair<TempPointSet, TempPointSet>& selected);
@@ -70,23 +77,24 @@ private:
 		this->scene()->addLine(x1, y1, x2, y2, bound_pen);
 	}
 
+	QThread workerThread;
+	SamplingWorker sw;
 	bool grid_width_changed = false;
 
-	HaarWaveletSampling hws{ QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) };
-	
 	std::string data_name;
-	std::ifstream data_source;
 	std::unordered_map<uint, std::string>* class2label;
-	uint point_count = 0;
+	size_t last_class_num = 0;
+	clock_t last_time = 0l;
 
-	PointSet seeds;
+	std::unordered_map<int, QGraphicsEllipseItem*> pos2item;
+	std::pair<std::vector<QGraphicsEllipseItem*>, std::vector<QGraphicsEllipseItem*>> _removed_and_added;
+
 	//std::vector<std::weak_ptr<RecontructedGrid>> nodes;
 	QGraphicsScene *virtual_scene;
 
+	std::vector<std::string> text_info;
 	std::vector<QBrush> color_brushes;
 	int color_index = 0;
 	QPen bound_pen;
-
-	Extent real_extent, visual_extent = { (qreal)MARGIN.left, (qreal)MARGIN.top, (qreal)(CANVAS_WIDTH - MARGIN.right), (qreal)(CANVAS_HEIGHT - MARGIN.bottom) };
 };
 
