@@ -102,10 +102,10 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, QWidget *
 		algoGroupLayout->addWidget(spin_occupied_space_ratio, 2, 1);
 		algoGroupLayout->addWidget(batch_label, 3, 0);
 		algoGroupLayout->addWidget(spin_batch, 3, 1);
-		algoGroupLayout->addWidget(frame_id_label, 4, 0);
-		algoGroupLayout->addWidget(spin_frame_id, 4, 1);
-		algoGroupLayout->addWidget(eps_label, 5, 0);
-		algoGroupLayout->addWidget(spin_eps, 5, 1);
+		algoGroupLayout->addWidget(eps_label, 4, 0);
+		algoGroupLayout->addWidget(spin_eps, 4, 1);
+		algoGroupLayout->addWidget(frame_id_label, 5, 0);
+		algoGroupLayout->addWidget(spin_frame_id, 5, 1);
 		//algoGroupLayout->addWidget(show_bound_option, 4, 0, 1, -1);
 
 		layout->addWidget(algorithm_group);

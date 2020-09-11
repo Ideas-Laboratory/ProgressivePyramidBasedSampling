@@ -10,15 +10,9 @@
 //constants
 #define MY_DATASET_FILENAME "./data/synthesis1.csv"
 
-const static int CANVAS_WIDTH = 900;//316;//1080; //720; //480; 
-const static int CANVAS_HEIGHT = 900;//316;//810; //540; //360; 
+const static int CANVAS_WIDTH = 900; //1600
+const static int CANVAS_HEIGHT = 900;
 
-//const static struct {
-//	const int left = 0;
-//	const int right = 0;
-//	const int top = 0;
-//	const int bottom = 0;
-//} MARGIN;
 const static struct {
 	const int left = 20;
 	const int right = 20;
@@ -76,6 +70,5 @@ struct Param {
 	uint end_level;
 	double low_density_weight;
 	uint max_sample_number;
-	//bool show_border;
 	bool use_alpha_channel;
 };

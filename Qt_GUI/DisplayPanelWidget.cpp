@@ -15,18 +15,6 @@ DisplayPanelWidget::DisplayPanelWidget(SamplingProcessViewer *spv, QWidget * par
 		clearAllChildren();
 		addClassToColorMappingTable(class2label);
 	});
-	connect(spv, &SamplingProcessViewer::adjustmentStart, [this]() {
-		removeSpecifiedChildren([](QWidget* w) { return w->objectName() == "o"; });
-	});
-	connect(spv, &SamplingProcessViewer::sampleStart, [this]() {
-		removeSpecifiedChildren([](QWidget* w) { return !w->objectName().isEmpty(); });
-	});
-	connect(spv, &SamplingProcessViewer::redrawStart, [this]() {
-		removeSpecifiedChildren([](QWidget* w) { return !w->objectName().isEmpty(); });
-	});
-	//connect(spv, &SamplingProcessViewer::pointSelected, [this](uint index, uint class_) {
-	//	qDebug() << index << ',' << QString(this->class2label->at(class_).c_str());
-	//});
 }
 
 void DisplayPanelWidget::resizeEvent(QResizeEvent * e)
@@ -66,63 +54,12 @@ void DisplayPanelWidget::addClassToColorMappingTable(const std::unordered_map<ui
 	this->layout()->addWidget(mapping_box);
 }
 
-void DisplayPanelWidget::addAreaInfo(const QString& name, StatisticalInfo * total_info, StatisticalInfo * sample_info)
-{
-	if (total_info->total_num > 0) {
-		QTableWidget *tw = new QTableWidget(this);
-		tw->setObjectName(name);
-		tw->setEditTriggers(QAbstractItemView::NoEditTriggers);
-		tw->verticalHeader()->setVisible(false);
-		tw->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-
-		tw->setRowCount(total_info->class_point_num.size() + 1);
-		tw->setColumnCount(4);
-		tw->setHorizontalHeaderLabels(QStringList{ "", "Actual", "Sample", "Ratio" });
-		tw->setColumnWidth(0, 70);
-		auto &map_t = total_info->class_point_num, &map_s = sample_info->class_point_num;
-		int rows = 0;
-		for (int i = 0, sz = selected_class_order.size(); i < sz; ++i) {
-			int class_index = selected_class_order[i];
-			if (map_t.find(class_index) != map_t.end()) {
-				QTableWidgetItem *newItem = new QTableWidgetItem();
-				newItem->setBackground(this->viewer->getColorBrushes()[class_index]);
-				tw->setItem(rows, 0, newItem);
-				newItem = new QTableWidgetItem(QString::number(map_t[class_index]));
-				tw->setItem(rows, 1, newItem);
-				uint sample_num = map_s.find(class_index) != map_s.end() ? map_s[class_index] : 0;
-				newItem = new QTableWidgetItem(QString::number(sample_num));
-				tw->setItem(rows, 2, newItem);
-				newItem = new QTableWidgetItem(QString::number(100.0*sample_num/map_t[class_index], 'f', 2) + "%");
-				tw->setItem(rows, 3, newItem);
-				++rows;
-			}
-		}
-		tw->setItem(rows, 0, new QTableWidgetItem(tr("Sum:")));
-		tw->setItem(rows, 1, new QTableWidgetItem(QString::number(total_info->total_num)));
-		tw->setItem(rows, 2, new QTableWidgetItem(QString::number(sample_info->total_num)));
-		tw->setItem(rows, 3, new QTableWidgetItem(QString::number(100.0*sample_info->total_num/total_info->total_num, 'f', 2) + "%"));
-		tw->setRowCount(++rows);
-
-		tw->setFixedHeight(tw->horizontalHeader()->height() + 4 + tw->rowHeight(0)*rows);
-		this->layout()->addWidget(tw);
-	}
-	delete total_info;
-	delete sample_info;
-}
-
-void DisplayPanelWidget::removeSpecifiedChildren(std::function<bool(QWidget*)> pred)
+void DisplayPanelWidget::clearAllChildren()
 {
 	for (int i = this->layout()->count() - 1; i > -1; --i) {
 		QWidget *w = this->layout()->itemAt(i)->widget();
-		if (pred(w)) {
-			this->layout()->removeWidget(w);
-			w->close();
-		}
+		this->layout()->removeWidget(w);
+		w->close();
 	}
-}
-
-void DisplayPanelWidget::clearAllChildren()
-{
-	removeSpecifiedChildren([](QWidget* w) { return true; });
 }
 

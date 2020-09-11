@@ -16,9 +16,7 @@ protected:
 
 private:
 	void addClassToColorMappingTable(const std::unordered_map<uint, std::string>* class2label);
-	void addAreaInfo(const QString& name, StatisticalInfo* total_info, StatisticalInfo* sample_info);
 
-	void removeSpecifiedChildren(std::function<bool(QWidget*)> pred);
 	void clearAllChildren();
 	SamplingProcessViewer* viewer;
 	QScrollArea* container;

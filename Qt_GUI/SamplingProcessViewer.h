@@ -49,7 +49,6 @@ signals:
 	void finished();
 	void redrawStart();
 	void sampleStart();
-	void adjustmentStart();
 	void inputImageChanged();
 	void iterationStatus(int iteration, int numberPoints, int splits);
 	void areaCounted(StatisticalInfo* total_info, StatisticalInfo* sample_info);
@@ -65,7 +64,6 @@ protected:
 private:
 	void drawPointByClass(TempPointSet& selected = TempPointSet());
 	void drawPointRandomly(TempPointSet& selected = TempPointSet());
-	void drawPointsByPair(std::pair<TempPointSet, TempPointSet>& selected);
 
 	void paletteToColors();
 	void drawPoint(qreal x, qreal y, qreal radius, QBrush c, bool is_virtual = false);
@@ -82,14 +80,13 @@ private:
 	bool grid_width_changed = false;
 
 	std::string data_name;
+	std::string data_path;
 	std::unordered_map<uint, std::string>* class2label;
 	size_t last_class_num = 0;
 	clock_t last_time = 0l;
 
 	std::unordered_map<int, QGraphicsEllipseItem*> pos2item;
 	std::pair<std::vector<QGraphicsEllipseItem*>, std::vector<QGraphicsEllipseItem*>> _removed_and_added;
-
-	//std::vector<std::weak_ptr<RecontructedGrid>> nodes;
 	QGraphicsScene *virtual_scene;
 
 	std::vector<std::string> text_info;

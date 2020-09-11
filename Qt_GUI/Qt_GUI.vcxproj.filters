@@ -86,9 +86,6 @@
     <ClCompile Include="AdaptiveBinningSampling.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ReservoirSampling.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="qt_gui.h">
@@ -130,9 +127,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="AdaptiveBinningSampling.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ReservoirSampling.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

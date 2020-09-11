@@ -4,7 +4,6 @@
 #include "utils.h"
 #include "HaarWaveletSampling.h"
 #include "AdaptiveBinningSampling.h"
-#include "ReservoirSampling.h"
 
 class SamplingWorker : public QObject {
 	Q_OBJECT
@@ -13,9 +12,9 @@ public:
 	SamplingWorker() { openDataSource(data_source, MY_DATASET_FILENAME); }
 	uint getPointCount() { return point_count; }
 	const std::vector<uint>& getSelected() { return seeds; }
-	uint getIndexByPos(const QPointF& pos) { return hws.getIndexByPos(pos); }
+	TempPointSet getSeedPoints() { return hws.getSeedPoints(); }
 
-	void setDataSource(std::string&& data_path);
+	void setDataSource(std::string& data_path);
 	void setClassMapping(std::unordered_map<uint, std::string>* class_mapping) { class2label = class_mapping; }
 	void updateGrids();
 
@@ -26,10 +25,10 @@ signals:
 	void readFinished(FilteredPointSet* filtered_points);
 	void sampleFinished(std::pair<TempPointSet, TempPointSet>* removed_n_added);
 	void writeFrame(int frame_id);
+	void finished();
 
 private:
 	HaarWaveletSampling hws{ QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) };
-	ReservoirSampling rs;
 	AdaptiveBinningSampling abs;
 
 	Indices seeds;
