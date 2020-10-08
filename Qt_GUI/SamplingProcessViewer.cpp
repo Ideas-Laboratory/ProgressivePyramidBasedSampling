@@ -241,7 +241,7 @@ void SamplingProcessViewer::generateFiles(int frame_id)
 
 	fn_stream.precision(4);
 	fn_stream << params.grid_width << '_' << params.end_level << '_';
-	fn_stream << params.low_density_weight << '_' << params.epsilon << '_' << frame_id;
+	fn_stream << params.data_density_weight << '_' << params.epsilon << '_' << frame_id;
 	//fn_stream << params.grid_width << '_' << tree_sampling_params.threshold << '_'
 	//	<< tree_sampling_params.occupied_space_ratio << '_' << tree_sampling_params.backtracking_depth << '_' << frame_id;
 	auto filepath = fn_stream.str();

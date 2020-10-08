@@ -64,16 +64,16 @@ void HaarWaveletSampling::transformHelper(DensityMap & dm, int i, int j, int int
 
 vector<vector<pair<int, int>>> HaarWaveletSampling::lowDensityJudgementHelper(const vector<pair<int, int>>& indices) const
 {
-	double threshold = 0.8*getVal(actual_map, indices[0]); // A * tau(the nondense rate)
+	double threshold = params.data_density_weight*getVal(actual_map, indices[0]);
 	set<int> low_density_indices;
 	int B = getVal(actual_map, indices[1]), C = getVal(actual_map, indices[2]), D = getVal(actual_map, indices[3]);
-	if (abs(B) > threshold) { // |B| > tau*A
+	if (abs(B) > threshold) { // |B| > lambda*A
 		B > 0 ? low_density_indices.insert({ 1,3 }) : low_density_indices.insert({ 0,2 });
 	}
-	if (abs(C) > threshold) { // |C| > tau*A
+	if (abs(C) > threshold) { // |C| > lambda*A
 		C > 0 ? low_density_indices.insert({ 2,3 }) : low_density_indices.insert({ 0,1 });
 	}
-	if (abs(D) > threshold) { // |D| > tau*A
+	if (abs(D) > threshold) { // |D| > lambda*A
 		D > 0 ? low_density_indices.insert({ 1,2 }) : low_density_indices.insert({ 0,3 });
 	}
     vector<int> high_density_indices, all_indices{0,1,2,3};
@@ -223,7 +223,7 @@ void HaarWaveletSampling::customizedInverseTransform()
 					if (!is_first_frame) transformHelper(previous_assigned_maps.back(), i, j, k, true);
 					assigned_map[i][j] = 0;
 					
-					/* AssignForOrdinaryRegions */
+					/* AssignForHighDensityRegions */
 					// calculate assigned number based on relative data density
 					sort(high_density_indices.begin(), high_density_indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
 						int am_a = getVal(actual_map, a), am_b = getVal(actual_map, b);
@@ -231,14 +231,15 @@ void HaarWaveletSampling::customizedInverseTransform()
 							getVal(visual_map, a) > getVal(visual_map, b);
 					});
 					int &max_assigned_val = assigned_map[high_density_indices[0].first][high_density_indices[0].second];
-					max_assigned_val = (int)ceil(static_cast<double>(getVal(visual_map, high_density_indices[0])) * total_assigned_points / visual_point_num);
+					max_assigned_val = (int)ceil(static_cast<double>(getVal(visual_map, high_density_indices[0])) * total_assigned_points / visual_point_num); // at least 1
 					double sampling_ratio_zero = static_cast<double>(max_assigned_val) / getVal(actual_map, high_density_indices[0]);
+					
 					int remain_assigned_point_num = total_assigned_points - max_assigned_val;
 					for (size_t _i = 1, sz = high_density_indices.size(); _i < sz && remain_assigned_point_num > 0; ++_i) {
 						int actual_val = getVal(actual_map, high_density_indices[_i]);
 						if (actual_val == 0) break; // skip empty areas
 
-						int assigned_val = round(sampling_ratio_zero * actual_val); // at least 1
+						int assigned_val = round(sampling_ratio_zero * actual_val);
 						assigned_val = min({ assigned_val, getVal(visual_map, high_density_indices[_i]), remain_assigned_point_num });
 						assigned_map[high_density_indices[_i].first][high_density_indices[_i].second] = assigned_val;
 
@@ -247,7 +248,7 @@ void HaarWaveletSampling::customizedInverseTransform()
 
 					// calculate assigned number for low density regions intentionally
                     if(!low_density_indices.empty()) {
-						/* AssignForSparseRegions */
+						/* AssignForLowDensityRegions */
 						int low_density_sum = 0, high_density_sum = 0, low_visual_sum = 0, high_visual_sum = 0, high_assigned = 0;
                         for(auto &idx : low_density_indices) {
                             low_density_sum += getVal(actual_map, idx);
@@ -260,7 +261,7 @@ void HaarWaveletSampling::customizedInverseTransform()
                         for(auto &idx : high_density_indices) {
                             high_assigned += getVal(assigned_map, idx);
                         }
-						int low_assigned = round(high_assigned * ((1.0 - params.low_density_weight)*low_density_sum / high_density_sum + params.low_density_weight * low_visual_sum / high_visual_sum));
+						int low_assigned = round(high_assigned * (params.data_density_weight*low_density_sum / high_density_sum + (1.0 - params.data_density_weight)* low_visual_sum / high_visual_sum));
                         sort(low_density_indices.begin(), low_density_indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
                             return getVal(visual_map, a) < getVal(visual_map, b);
                         });

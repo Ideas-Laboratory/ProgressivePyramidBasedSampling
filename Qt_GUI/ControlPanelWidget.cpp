@@ -88,9 +88,9 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer * viewer, QWidget *
 		spin_occupied_space_ratio->setDecimals(4);
 		spin_occupied_space_ratio->setRange(0.0, 1.0);
 		spin_occupied_space_ratio->setSingleStep(0.1);
-		spin_occupied_space_ratio->setValue(params.low_density_weight);
+		spin_occupied_space_ratio->setValue(params.data_density_weight);
 		connect(spin_occupied_space_ratio, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-			[this](double value) { params.low_density_weight = value; });
+			[this](double value) { params.data_density_weight = value; });
 
 		QGridLayout* algoGroupLayout = new QGridLayout(algorithm_group);
 		algorithm_group->setLayout(algoGroupLayout);

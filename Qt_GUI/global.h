@@ -68,7 +68,7 @@ struct Param {
 	uint point_radius;
 	uint grid_width;
 	uint end_level;
-	double low_density_weight;
+	double data_density_weight;
 	uint max_sample_number;
 	bool use_alpha_channel;
 };
