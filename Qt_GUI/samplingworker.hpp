@@ -2,7 +2,7 @@
 
 #include "global.h"
 #include "utils.h"
-#include "HaarWaveletSampling.h"
+#include "HierarchicalSampling.h"
 #include "AdaptiveBinningSampling.h"
 #include "ReservoirSampling.h"
 
@@ -13,9 +13,10 @@ public:
 	SamplingWorker() { openDataSource(data_source, MY_DATASET_FILENAME); }
 	uint getPointCount() { return point_count; }
 	const std::vector<uint>& getSelected() { return seeds; }
-	uint getIndexByPos(const QPointF& pos) { return hws.getIndexByPos(pos); }
+	TempPointSet getSeedsOfSpecificFrame() { return hs.getSeeds(); }
+	uint getIndexByPos(const QPointF& pos) { return hs.getIndexByPos(pos); }
 
-	void setDataSource(std::string&& data_path);
+	void setDataSource(const std::string& data_path);
 	void setClassMapping(std::unordered_map<uint, std::string>* class_mapping) { class2label = class_mapping; }
 	void updateGrids();
 
@@ -28,7 +29,7 @@ signals:
 	void writeFrame(int frame_id);
 
 private:
-	HaarWaveletSampling hws{ QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) };
+	HierarchicalSampling hs{ QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) };
 	ReservoirSampling rs;
 	AdaptiveBinningSampling abs;
 

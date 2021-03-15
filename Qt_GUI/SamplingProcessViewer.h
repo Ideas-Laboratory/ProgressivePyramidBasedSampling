@@ -36,12 +36,11 @@ public:
 	uint getPointNum() { return sw.getPointCount(); }
 	const std::vector<QBrush>& getColorBrushes() { return color_brushes; }
 
-	const std::string ALGORITHM_NAME = "Progressive Sampling for Scatterplots";
+	const std::string ALGORITHM_NAME = "Pyramid-based Scatterplots Sampling";
 
 public slots:
 	void drawPointsProgressively(FilteredPointSet* points); // for virtual scene
 	void drawSelectedPointsProgressively(std::pair<TempPointSet, TempPointSet>* removed_n_added); // for this scene
-	void drawSelectedPointDiffsProgressively(std::pair<TempPointSet, TempPointSet>* removed_n_added);
 	void generateFiles(int frame_id);
 	void updateClassInfo();
 
@@ -63,12 +62,13 @@ protected:
 	void mouseReleaseEvent(QMouseEvent *me);
 
 private:
+	void reinitializeScreen();
 	void drawPointByClass(TempPointSet& selected = TempPointSet());
 	void drawPointRandomly(TempPointSet& selected = TempPointSet());
 	void drawPointsByPair(std::pair<TempPointSet, TempPointSet>& selected);
 
 	void paletteToColors();
-	void drawPoint(qreal x, qreal y, qreal radius, QBrush c, bool is_virtual = false);
+	QGraphicsItem* drawPoint(qreal x, qreal y, qreal radius, QBrush c, bool is_virtual = false);
 	void drawLine(qreal x1, qreal y1, qreal x2, qreal y2, bool isRed)
 	{
 		QColor c = isRed ? Qt::red : Qt::black;
@@ -82,12 +82,11 @@ private:
 	bool grid_width_changed = false;
 
 	std::string data_name;
+	std::string data_path = MY_DATASET_FILENAME;
 	std::unordered_map<uint, std::string>* class2label;
+	std::unordered_map<double, QGraphicsItem*> pos2item;
 	size_t last_class_num = 0;
 	clock_t last_time = 0l;
-
-	std::unordered_map<int, QGraphicsEllipseItem*> pos2item;
-	std::pair<std::vector<QGraphicsEllipseItem*>, std::vector<QGraphicsEllipseItem*>> _removed_and_added;
 
 	//std::vector<std::weak_ptr<RecontructedGrid>> nodes;
 	QGraphicsScene *virtual_scene;

@@ -4,6 +4,8 @@ using namespace std;
 
 const static vector<uint> power_2 = { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192 };
 
+chrono::time_point<chrono::steady_clock> start;
+
 HaarWaveletSampling::HaarWaveletSampling(const QRect & bounding_rect)
 {
 	horizontal_bin_num = bounding_rect.width() / params.grid_width + 1;
@@ -36,7 +38,6 @@ HaarWaveletSampling::HaarWaveletSampling(const QRect & bounding_rect)
 
 pair<TempPointSet, TempPointSet>* HaarWaveletSampling::execute(const FilteredPointSet* origin, bool is_1st)
 {
-	auto start = chrono::high_resolution_clock::now();
 	is_first_frame = is_1st;// true;
 	_added.clear(), _removed.clear();
 	if (is_1st) {
@@ -91,7 +92,7 @@ void HaarWaveletSampling::transformHelper(std::vector<std::vector<std::unordered
 
 vector<vector<pair<int, int>>> HaarWaveletSampling::lowDensityJudgementHelper(const vector<pair<int, int>>& indices) const
 {
-	double threshold = 0.8*getVal(actual_map, indices[0]); // A * tau(the nondense rate)
+	double threshold = params.lambda*getVal(actual_map, indices[0]); // A * tau(the nondense rate)
 	set<int> low_density_indices;
 	int B = getVal(actual_map, indices[1]), C = getVal(actual_map, indices[2]), D = getVal(actual_map, indices[3]);
 	if (abs(B) > threshold) { // |B| > tau*A
@@ -113,21 +114,53 @@ vector<vector<pair<int, int>>> HaarWaveletSampling::lowDensityJudgementHelper(co
 	return vector<vector<pair<int, int>>>{ low, high };
 }
 
-void HaarWaveletSampling::smoothingHelper(pair<int, int>&& pos_x, pair<int, int>&& pos_y, int area)
+void HaarWaveletSampling::smoothingHelper(pair<int, int>&& pos_x, pair<int, int>&& pos_y, int k)
 {
 	pair<int, int> pos_low, pos_high;
-	if (actual_map[pos_x.first][pos_x.second] > actual_map[pos_y.first][pos_y.second])
+	if (getVal(actual_map, pos_x) > getVal(actual_map, pos_y))
 		pos_high = move(pos_x), pos_low = move(pos_y);
 	else
 		pos_high = move(pos_y), pos_low = move(pos_x);
 	if (actual_map[pos_high.first][pos_high.second] > 0) {
-		if (assigned_map[pos_high.first][pos_high.second] < assigned_map[pos_low.first][pos_low.second]) {
-			assigned_map[pos_high.first][pos_high.second] = min(visual_map[pos_high.first][pos_high.second], assigned_map[pos_low.first][pos_low.second]);
+		int assigned_sum = getVal(assigned_map, pos_high) + getVal(assigned_map, pos_low);
+		bool repaired = false;
+		if (getVal(assigned_map, pos_high) < getVal(assigned_map, pos_low)) { // low density case
+			int actual_sum = getVal(actual_map, pos_high) + getVal(actual_map, pos_low),
+				visual_sum = getVal(visual_map, pos_high) + getVal(visual_map, pos_low);
+			assigned_map[pos_high.first][pos_high.second] = min(getVal(visual_map, pos_high),
+				(int)round(static_cast<double>(assigned_sum) / (params.lambda*actual_sum / getVal(actual_map, pos_high) + (1.0 - params.lambda)*visual_sum / getVal(visual_map, pos_high))));
+			assigned_map[pos_low.first][pos_low.second] = assigned_sum - getVal(assigned_map, pos_high);
+			repaired = true;
 		}
-		else if (assigned_map[pos_high.first][pos_high.second] == area) {
-			assigned_map[pos_low.first][pos_low.second] = max(assigned_map[pos_low.first][pos_low.second],
-				(int)round((double)assigned_map[pos_high.first][pos_high.second] * actual_map[pos_low.first][pos_low.second] / actual_map[pos_high.first][pos_high.second]));
-			assigned_map[pos_low.first][pos_low.second] = min(visual_map[pos_low.first][pos_low.second], assigned_map[pos_low.first][pos_low.second]);
+		else if ((double)getVal(actual_map, pos_low) / getVal(actual_map, pos_high) > (double)getVal(assigned_map, pos_low) / getVal(assigned_map, pos_high)) { // high density case
+			int actual_sum = getVal(actual_map, pos_high) + getVal(actual_map, pos_low);
+			assigned_map[pos_high.first][pos_high.second] = min(getVal(visual_map, pos_high), (int)round(static_cast<double>(assigned_sum)*getVal(actual_map, pos_high) / actual_sum));
+			assigned_map[pos_low.first][pos_low.second] = assigned_sum - getVal(assigned_map, pos_high);
+			repaired = true;
+		}
+		
+		// repairing for progressive version
+		if (!is_first_frame && repaired) {
+			pair<int, int> marked, unmarked;
+			bool exclusive_or = false;
+			if (update_needed_map[pos_high.first][pos_high.second] && !update_needed_map[pos_low.first][pos_low.second]) {
+				marked = move(pos_high), unmarked = move(pos_low);
+				exclusive_or = true;
+			}
+			else if (update_needed_map[pos_low.first][pos_low.second] && !update_needed_map[pos_high.first][pos_high.second]) {
+				marked = move(pos_low), unmarked = move(pos_high);
+				exclusive_or = true;
+			}
+			if (exclusive_or) {
+				double current_marked = getVal(assigned_map, marked), previous_unmarked = getVal(previous_assigned_maps.back(), unmarked);
+				if (getVal(assigned_map, unmarked) != 0 && (double)getVal(actual_map, unmarked) / getVal(actual_map, marked) - previous_unmarked / current_marked > params.epsilon) {
+					for (int _i = unmarked.first, i_e = unmarked.first + k; _i < i_e; ++_i) {
+						for (int _j = unmarked.second, j_e = unmarked.second + k; _j < j_e; ++_j) {
+							update_needed_map[_i][_j] = true;
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -387,6 +420,7 @@ void HaarWaveletSampling::computeAssignMapsProgressively(const FilteredPointSet*
 	}
 
 	convertToDensityMap();
+	start = chrono::high_resolution_clock::now();
 	forwardTransform();
 	inverseTransform();
 	//determineLabelOfSeeds();
@@ -465,7 +499,7 @@ void HaarWaveletSampling::inverseTransform()
 						int actual_val = getVal(actual_map, high_density_indices[_i]);
 						if (actual_val == 0) break; // an empty area can only lead to useless calculation
 
-						int assigned_val = round(sampling_ratio_zero * actual_val); // at least 1
+						int assigned_val = round(sampling_ratio_zero * actual_val);
 						assigned_val = min({ assigned_val, getVal(visual_map, high_density_indices[_i]), remain_assigned_point_num });
 						assigned_map[high_density_indices[_i].first][high_density_indices[_i].second] = assigned_val;
 
@@ -486,7 +520,7 @@ void HaarWaveletSampling::inverseTransform()
                         for(auto &idx : high_density_indices) {
                             high_assigned += getVal(assigned_map, idx);
                         }
-						int low_assigned = round(high_assigned * ((1.0 - params.low_density_weight)*low_density_sum / high_density_sum + params.low_density_weight * low_visual_sum / high_visual_sum));
+						int low_assigned = round(high_assigned * (params.lambda*low_density_sum / high_density_sum + (1.0 - params.lambda) * low_visual_sum / high_visual_sum));
                         sort(low_density_indices.begin(), low_density_indices.end(), [this](const pair<int, int> &a, const pair<int, int> &b) {
                             return getVal(visual_map, a) < getVal(visual_map, b);
                         });
@@ -538,15 +572,18 @@ void HaarWaveletSampling::inverseTransform()
 		}
 
 		if (shift < side_length && k > 0) {
-			int area = k*k;
-			for (int j = 0; j < vertical_bin_num; j += k) {
+			for (int j = 0; j < vertical_bin_num; j += shift) {
 				for (int i = k; i + k < horizontal_bin_num; i += shift) {
-					smoothingHelper(make_pair(i, j), make_pair(i + k, j), area);
+					int i_k = i + k, j_k = j + k;
+					smoothingHelper(make_pair(i, j), make_pair(i_k, j), k);
+					smoothingHelper(make_pair(i, j_k), make_pair(i_k, j_k), k);
 				}
 			}
 			for (int j = k; j + k < vertical_bin_num; j += shift) {
-				for (int i = 0; i < horizontal_bin_num; i += k) {
-					smoothingHelper(make_pair(i, j), make_pair(i, j + k), area);
+				for (int i = 0; i < horizontal_bin_num; i += shift) {
+					int i_k = i + k, j_k = j + k;
+					smoothingHelper(make_pair(i, j), make_pair(i, j_k), k);
+					smoothingHelper(make_pair(i_k, j), make_pair(i_k, j_k), k);
 				}
 			}
 		}
@@ -635,7 +672,7 @@ pair<TempPointSet, TempPointSet>* HaarWaveletSampling::getSeedsDifference()
 		added.push_back(elected_points[idx.first][idx.second].get());
 	}
 	int change = ((int)added.size() - (int)removed.size());
-	qDebug() << (int)added.size() + (int)removed.size();
+	qDebug() << "modified points:" << (int)added.size() + (int)removed.size();
 	current_point_num += change;
 	//qDebug() << "add: " << added.size() << "remove:" << removed.size() << ", frame_id=" << last_frame_id + 1;
 	//qDebug() << "The number of points in current frame: " << current_point_num;
@@ -662,4 +699,22 @@ pair<TempPointSet, TempPointSet> HaarWaveletSampling::getSeedsWithDiff()
 	}
 	last_frame_id = params.displayed_frame_id;
 	return make_pair(result, diff);
+}
+
+TempPointSet HaarWaveletSampling::getSeeds()
+{
+	if (previous_assigned_maps.empty()) return TempPointSet();
+
+	int frame_id = params.displayed_frame_id > previous_assigned_maps.size() ? previous_assigned_maps.size() - 1 : params.displayed_frame_id - 1;
+	
+	TempPointSet result;
+	for (uint i = 0; i < horizontal_bin_num; ++i) {
+		for (uint j = 0; j < vertical_bin_num; ++j) {
+			if (previous_assigned_maps[frame_id][i][j] != 0) {
+				result.push_back(elected_points[i][j].get());
+			}
+		}
+	}
+	last_frame_id = params.displayed_frame_id;
+	return result;
 }

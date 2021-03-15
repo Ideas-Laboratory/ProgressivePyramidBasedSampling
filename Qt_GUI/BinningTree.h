@@ -15,11 +15,12 @@
 extern Param params;
 extern std::vector<int> selected_class_order;
 
-static struct {
-	double threshold = 0.008;
-	double occupied_space_ratio = 0.005;
-	int backtracking_depth = 4;
-} tree_sampling_params;
+struct TreeParams {
+	double threshold;
+	double occupied_space_ratio;
+	int backtracking_depth;
+};
+extern TreeParams tree_sampling_params;
 
 struct MinGrid {
 	uint left;

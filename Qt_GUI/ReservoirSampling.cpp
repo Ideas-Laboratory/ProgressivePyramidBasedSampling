@@ -1,6 +1,6 @@
 #include "ReservoirSampling.h"
 
-const static int seeds_num = 7800;
+const static int seeds_num = 2100;
 
 using namespace std;
 
@@ -15,6 +15,8 @@ ReservoirSampling::ReservoirSampling()
 
 pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPointSet* origin, bool is_first_frame)
 {
+	chrono::time_point<chrono::steady_clock> start = chrono::high_resolution_clock::now();
+	
 	vector<bool> modified(seeds.size(), false);
 	unordered_set<uint> _added;
 
@@ -23,7 +25,7 @@ pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPoint
 		visited_num = 0;
 		elected_points->clear();
 		removed_cache->clear();
-		W = exp(log(double_dist(gen) / seeds_num));
+		W = exp(log(double_dist(gen)) / seeds_num);
 	}
 	if (visited_num < seeds_num) {
 		fill(modified.begin() + visited_num, modified.end(), true);
@@ -41,7 +43,7 @@ pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPoint
 	TempPointSet removed;
 	for (; it != origin->cend(); ++it) {
 		++visited_num;
-		if (visited_num > next_target) {
+		if (visited_num >= next_target) {
 			int idx = int_dis(gen);
 			if (modified[idx]) {
 				_added.erase(seeds[idx]);
@@ -61,12 +63,14 @@ pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPoint
 			next_target += (int)floor(log(double_dist(gen)) / log(1 - W)) + 1;
 		}
 	}
+	qDebug() << "removed points:" << removed.size();
 
 	TempPointSet added;
 	for (auto& idx : _added) {
 		added.push_back(elected_points->at(idx).get());
 	}
+	qDebug() << "execution:" << (double)(chrono::high_resolution_clock::now() - start).count() / 1e9;
 
-	qDebug() << ((int)added.size() - (int)removed.size());
+	qDebug() << "modified points: " << ((int)added.size() + (int)removed.size());
 	return new pair<TempPointSet, TempPointSet>(removed, added);
 }

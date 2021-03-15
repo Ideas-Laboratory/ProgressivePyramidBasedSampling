@@ -25,7 +25,7 @@ std::vector<std::weak_ptr<BinningTreeNode>> AdaptiveBinningSampling::getAllLeave
 
 std::pair<TempPointSet, TempPointSet>* AdaptiveBinningSampling::execute(const FilteredPointSet * origin, const QRect& bounding_rect, bool is_1st)
 {
-	if (origin->empty()) return new pair<TempPointSet, TempPointSet>();
+	if (origin->empty()) return new std::pair<TempPointSet, TempPointSet>();;
 
 	if (is_1st)
 		tree = make_unique<BinningTree>(origin, bounding_rect);
@@ -110,10 +110,12 @@ Indices AdaptiveBinningSampling::KDTreeGuidedSampling()
 
 std::pair<TempPointSet, TempPointSet>* AdaptiveBinningSampling::executeWithoutCallback(const FilteredPointSet * origin, const QRect& bounding_rect, bool is_1st)
 {
-	if (origin->empty()) return new pair<TempPointSet, TempPointSet>();
+	if (origin->empty()) return new std::pair<TempPointSet, TempPointSet>();
 
-	if (is_1st)
+	if (is_1st) {
 		tree = make_unique<BinningTree>(origin, bounding_rect);
+		last_seeds.clear();
+	}
 	else
 		tree->updateMinGrids(origin);
 	current_iteration_status = { 0,0 };
@@ -127,7 +129,7 @@ std::pair<TempPointSet, TempPointSet>* AdaptiveBinningSampling::executeWithoutCa
 	} while (notFinish());
 	auto &samples = leavesToSeeds(); //KDTreeGuidedSampling();
 	//qDebug() << (std::clock() - start) / (double)CLOCKS_PER_SEC;
-	if(is_1st) qDebug() << "The number of points in first frame: " << (int)samples.size();
+	if (is_1st) qDebug() << "The number of points in first frame: " << (int)samples.size();
 	else qDebug() << "The number of points in current frame: " << (int)samples.size();
 
 	current_iteration_status.seed_num = samples.size();

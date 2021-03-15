@@ -23,6 +23,7 @@ public:
 	Indices selectSeeds();
 	std::pair<TempPointSet, TempPointSet>* getSeedsDifference();
 	std::pair<TempPointSet, TempPointSet> getSeedsWithDiff();
+	TempPointSet getSeeds();
 
 	int getFrameID() { return last_frame_id; }
 	uint getSideLength() { return side_length; }
@@ -46,7 +47,7 @@ private:
 	void transformHelper(DensityMap& dm, int i, int j, int interval, bool inverse = false);
 	void transformHelper(std::vector<std::vector<std::unordered_map<uint, int>>>& dm, int i, int j, int interval, bool inverse = false);
 	std::vector<std::vector<std::pair<int, int>>> lowDensityJudgementHelper(const std::vector<std::pair<int, int>>& indices) const;
-	void smoothingHelper(std::pair<int, int> &&pos_x, std::pair<int, int> &&pos_y, int area);
+	void smoothingHelper(std::pair<int, int> &&pos_x, std::pair<int, int> &&pos_y, int k);
 	bool hasDiscrepancy(const std::vector<std::pair<int, int>>& indices);
 	double fillQuota(int i, int j);
 	void splitQuota(const std::unordered_map<uint, int>& upper_info, int i, int j, int interval);
