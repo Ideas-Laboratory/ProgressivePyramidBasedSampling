@@ -40,7 +40,7 @@ public:
 
 public slots:
 	void drawPointsProgressively(FilteredPointSet* points); // for virtual scene
-	void drawSelectedPointsProgressively(std::pair<TempPointSet, TempPointSet>* removed_n_added); // for this scene
+	void drawSelectedPointsProgressively(std::pair<PointSet, PointSet>* removed_n_added); // for this scene
 	void generateFiles(int frame_id);
 	void updateClassInfo();
 
@@ -63,19 +63,11 @@ protected:
 
 private:
 	void reinitializeScreen();
-	void drawPointByClass(TempPointSet& selected = TempPointSet());
-	void drawPointRandomly(TempPointSet& selected = TempPointSet());
-	void drawPointsByPair(std::pair<TempPointSet, TempPointSet>& selected);
+	void drawPointRandomly(PointSet& selected);
+	void drawPointsByPair(std::pair<PointSet, PointSet>& selected);
 
 	void paletteToColors();
 	QGraphicsItem* drawPoint(qreal x, qreal y, qreal radius, QBrush c, bool is_virtual = false);
-	void drawLine(qreal x1, qreal y1, qreal x2, qreal y2, bool isRed)
-	{
-		QColor c = isRed ? Qt::red : Qt::black;
-		c.setAlphaF(0.5);
-		bound_pen.setColor(c);
-		this->scene()->addLine(x1, y1, x2, y2, bound_pen);
-	}
 
 	QThread workerThread;
 	SamplingWorker sw;
@@ -85,6 +77,7 @@ private:
 	std::string data_path = MY_DATASET_FILENAME;
 	std::unordered_map<uint, std::string>* class2label;
 	std::unordered_map<double, QGraphicsItem*> pos2item;
+	std::unordered_map<qint64, std::vector<QGraphicsItem*>> date2item;
 	size_t last_class_num = 0;
 	clock_t last_time = 0l;
 

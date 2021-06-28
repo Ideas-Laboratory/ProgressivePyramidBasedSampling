@@ -13,7 +13,7 @@ void openDataSource(ifstream& input, string filename)
 	input.unget();
 }
 
-PointSet * readDataSource(ifstream& input, unordered_map<uint, string>* class2label, int chuck_size)
+PointSet * readDataSource(ifstream& input, unordered_map<uint, string>* class2label)
 {
 	unordered_map<string, uint> label2class;
 	for (auto &u : *class2label)
@@ -23,20 +23,35 @@ PointSet * readDataSource(ifstream& input, unordered_map<uint, string>* class2la
 	string value;
 	double x = 0, y = 0;
 	int count = 0;
-	while (count < chuck_size && getline(input, value, ',')) {
+	unique_ptr<QDate> d = nullptr;
+	streampos pos = input.tellg();
+	while (getline(input, value, ',')) {
+		if (params.is_streaming) {
+			d = make_unique<QDate>(QDate::fromString(QString(value.c_str()), "yyyy-MM-dd"));
+			if (!points->empty() && points->back()->date->daysTo(*d) >= params.time_step) {
+				input.seekg(pos);
+				break;
+			}
+			getline(input, value, ',');
+		}
+		else if(count == params.chunk_size) {
+			input.seekg(pos);
+			break;
+		}
 		x = atof(value.c_str());
 		getline(input, value, ',');
 		y = atof(value.c_str());
 
-		getline(input, value);
+		getline(input, value, '\n');
 
 		if (label2class.find(value) == label2class.end()) { // mapping label (string) to class (unsigned int)
 			auto sz = label2class.size();
 			label2class[value] = sz;
 			class2label->emplace(label2class[value], value);
 		}
-		points->push_back(make_unique<LabeledPoint>(x, y, label2class[value]));
+		points->push_back(make_unique<LabeledPoint>(x, y, label2class[value], move(d)));
 		++count;
+		pos = input.tellg();
 	}
 
 	return points;

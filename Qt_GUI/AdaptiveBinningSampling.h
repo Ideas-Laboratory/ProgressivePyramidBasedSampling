@@ -28,8 +28,8 @@ public:
 	std::vector<std::weak_ptr<BinningTreeNode>> getAllLeaves();
 
 	/* main function that contains the framework */
-	std::pair<TempPointSet, TempPointSet>* execute(const FilteredPointSet* origin, const QRect& bounding_rect, bool is_1st);
-	std::pair<TempPointSet, TempPointSet>* executeWithoutCallback(const FilteredPointSet* origin, const QRect& bounding_rect, bool is_1st);
+	std::pair<PointSet, PointSet>* execute(const FilteredPointSet* origin, const QRect& bounding_rect, bool is_1st);
+	std::pair<PointSet, PointSet>* executeWithoutCallback(const FilteredPointSet* origin, const QRect& bounding_rect, bool is_1st);
 
 	// determine class labels and select samples
 	Indices KDTreeGuidedSampling();
@@ -48,7 +48,7 @@ private:
 
 	std::vector<NodeWithQuota> determineLabelOfLeaves();
 	Indices leavesToSeeds();
-	std::pair<TempPointSet, TempPointSet>* findRemovedAndAdded(const Indices& seeds);
+	std::pair<PointSet, PointSet>* findRemovedAndAdded(const Indices& seeds);
 
 	Status current_iteration_status;
 

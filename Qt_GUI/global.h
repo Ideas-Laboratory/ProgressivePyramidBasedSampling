@@ -5,6 +5,7 @@
 #include <memory>
 #include <chrono>
 #include <QPoint>
+#include <QDate>
 #include <QDebug>
 
 //constants
@@ -31,12 +32,13 @@ struct LabeledPoint
 {
 	QPointF pos;
 	uint label;
+	std::unique_ptr<QDate> date;
 	LabeledPoint() {}
-	LabeledPoint(double x, double y, uint l) : pos(x, y), label(l) {}
-	LabeledPoint(const std::unique_ptr<LabeledPoint>& p) : pos(p->pos), label(p->label) {}
+	LabeledPoint(double x, double y, uint l, std::unique_ptr<QDate> d) : pos(x, y), label(l), date(move(d)) {}
+	LabeledPoint(const std::unique_ptr<LabeledPoint>& p) : pos(p->pos), label(p->label),
+		date(p->date ? std::make_unique<QDate>(p->date->year(), p->date->month(), p->date->day()) : nullptr) {}
 };
 typedef std::vector<std::unique_ptr<LabeledPoint>> PointSet;
-typedef std::vector<LabeledPoint*> TempPointSet;
 
 typedef std::unordered_map<uint, std::unique_ptr<LabeledPoint>> FilteredPointSet;
 
@@ -68,7 +70,7 @@ struct StatisticalInfo {
 };
 
 struct Param {
-	uint batch;
+	uint chunk_size;
 	uint displayed_frame_id;
 	uint point_radius;
 	uint grid_width;
@@ -76,5 +78,8 @@ struct Param {
 	double density_threshold;
 	double outlier_weight;
 	double ratio_threshold;
+	bool is_streaming;
+	uint time_step;
+	uint time_window;
 	bool use_alpha_channel;
 };

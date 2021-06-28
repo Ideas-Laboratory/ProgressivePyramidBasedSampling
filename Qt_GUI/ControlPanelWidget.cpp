@@ -29,12 +29,6 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 
 	{// algo related stuff
 		QGroupBox* algorithm_group = new QGroupBox("Algorithm Settings:", this);
-		//QCheckBox* show_bound_option = new QCheckBox("Show the bounds of each bin.", this);
-		//show_bound_option->setChecked(params.show_border);
-		//show_bound_option->setToolTip("If enabled the algorithm will show bin bounds "
-		//	"during and after the tree construction.");
-		//connect(show_bound_option, &QCheckBox::clicked,
-		//	[this](bool value) { params.show_border = value; if (this->viewer->treeHasBeenBuilt()) { if (value) this->viewer->drawBorders(); else this->viewer->redrawPoints(); } });
 
 		QLabel* grid_width_label = new QLabel("Grid width:", this);
 		QSpinBox* spin_grid_width = new QSpinBox(this);
@@ -47,27 +41,47 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 
 		QLabel* frame_id_label = new QLabel("Frame ID:", this);
 		QSpinBox* spin_frame_id = new QSpinBox(this);
-		spin_frame_id->setRange(1, this->viewer->getPointNum() / params.batch + 1);
+		if (params.is_streaming)
+			spin_frame_id->setRange(1, INT_MAX);
+		else
+			spin_frame_id->setRange(1, this->viewer->getPointNum() / params.chunk_size + 1);
 		spin_frame_id->setValue(params.displayed_frame_id + 1);
 		connect(spin_frame_id, QOverload<int>::of(&QSpinBox::valueChanged),
 			[](int value) { params.displayed_frame_id = value - 1; });
 		connect(viewer, &SamplingProcessViewer::finished, [this, spin_frame_id]() {
 			//auto &result = div((int)this->viewer->getPointNum(), params.batch);
 			//spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
-			spin_frame_id->setMaximum(200);
-			});
+			if (!params.is_streaming) spin_frame_id->setMaximum(200);
+		});
 		connect(viewer, &SamplingProcessViewer::frameChanged, spin_frame_id, &QSpinBox::setValue);
 
-		QLabel* batch_label = new QLabel("Batch size:", this);
+		QLabel* batch_label = new QLabel("Chunk size:", this);
 		QSpinBox* spin_batch = new QSpinBox(this);
 		spin_batch->setRange(1, 2000000);
-		spin_batch->setValue(params.batch);
+		spin_batch->setValue(params.chunk_size);
 		connect(spin_batch, QOverload<int>::of(&QSpinBox::valueChanged), [this, spin_frame_id](int value) {
-			params.batch = value;
-			auto& result = div((int)this->viewer->getPointNum(), params.batch);
+			params.chunk_size = value;
+			auto& result = div((int)this->viewer->getPointNum(), params.chunk_size);
 			spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
-			});
+		});
 		
+		QLabel* step_label = new QLabel("Time step:", this);
+		QSpinBox* spin_step = new QSpinBox(this);
+		spin_step->setValue(params.time_step);
+		connect(spin_step, QOverload<int>::of(&QSpinBox::valueChanged),
+			[this](int value) { params.time_step = value;	});
+
+		QLabel* window_label = new QLabel("Window size:", this);
+		QSpinBox* spin_window = new QSpinBox(this);
+		spin_window->setValue(params.time_window);
+		connect(spin_window, QOverload<int>::of(&QSpinBox::valueChanged),
+			[this](int value) { params.time_window = value;	});
+
+		QCheckBox* streaming_option = new QCheckBox("Streaming data", this);
+		streaming_option->setChecked(params.is_streaming);
+		connect(streaming_option, &QCheckBox::clicked,
+			[this](bool value) { params.is_streaming = value; });
+
 		QLabel* stop_level_label = new QLabel("Stop level:", this);
 		QSpinBox* spin_stop_level = new QSpinBox(this);
 		spin_stop_level->setValue(params.stop_level);
@@ -116,6 +130,11 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 		algoGroupLayout->addWidget(spin_batch, 5, 1);
 		algoGroupLayout->addWidget(frame_id_label, 6, 0);
 		algoGroupLayout->addWidget(spin_frame_id, 6, 1);
+		algoGroupLayout->addWidget(step_label, 7, 0);
+		algoGroupLayout->addWidget(spin_step, 7, 1);
+		algoGroupLayout->addWidget(window_label, 8, 0);
+		algoGroupLayout->addWidget(spin_window, 8, 1);
+		algoGroupLayout->addWidget(streaming_option, 9, 0, 1, -1);
 
 		layout->addWidget(algorithm_group);
 	}

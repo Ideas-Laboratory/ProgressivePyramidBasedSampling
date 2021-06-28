@@ -37,7 +37,7 @@ HierarchicalSampling::HierarchicalSampling(const QRect& bounding_rect)
 	}
 }
 
-pair<TempPointSet, TempPointSet>* HierarchicalSampling::execute(const FilteredPointSet* origin, bool is_1st)
+pair<PointSet, PointSet>* HierarchicalSampling::execute(const FilteredPointSet* origin, bool is_1st)
 {
 	_added.clear(), _removed.clear();
 	if (is_1st) { // is a new dataset
@@ -46,7 +46,7 @@ pair<TempPointSet, TempPointSet>* HierarchicalSampling::execute(const FilteredPo
 		initializeGrids();
 		previous_assigned_maps.clear();
 	}
-	is_first_frame = is_1st;
+	is_first_frame = is_1st || params.ratio_threshold == 0.0;
 
 	computeAssignMapsProgressively(origin);
 	auto seeds = getSeedsDifference();
@@ -241,6 +241,7 @@ void HierarchicalSampling::computeAssignMapsProgressively(const FilteredPointSet
 void HierarchicalSampling::convertToDensityMap(const FilteredPointSet* origin)
 {
 	auto &D = py.density_map[max_level], &V = py.visibility_map[max_level], &A = py.assignment_map[max_level];
+	QDate *last_date = nullptr;
 	for (auto& pr : *origin) {
 		auto& p = pr.second;
 		int x = visual2grid(p->pos.x(), MARGIN.left),
@@ -255,6 +256,26 @@ void HierarchicalSampling::convertToDensityMap(const FilteredPointSet* origin)
 			index_map[x][y][p->label] = pr.first;
 		}
 		++D[x][y];
+
+		if (params.is_streaming) {
+			if (sliding_window.find(*p->date) == sliding_window.end())
+				sliding_window.emplace(*p->date, DensityMap(horizontal_bin_num, vector<int>(vertical_bin_num)));
+			++sliding_window[*p->date][x][y];
+			if (last_date == nullptr || *last_date < *p->date)
+				last_date = p->date.get(); // find the last date
+		}
+	}
+	if (params.is_streaming) {
+		for (auto it = sliding_window.begin(); it != sliding_window.end();) {
+			if (it->first.daysTo(*last_date) > params.time_window) {
+				for (size_t i = 0; i < horizontal_bin_num; ++i)
+					for (size_t j = 0; j < vertical_bin_num; ++j)
+						D[i][j] -= it->second[i][j];
+				it = sliding_window.erase(it);
+			}
+			else
+				++it;
+		}
 	}
 	
 	for (uint i = 0; i < power_2[max_level]; ++i) {
@@ -431,7 +452,7 @@ void HierarchicalSampling::generateAssignmentMapsHierarchically()
 	}
 
 	int point_num = 0;
-	if (is_first_frame) {
+	if (previous_assigned_maps.empty()) {
 		for (uint j = 0; j < vertical_bin_num; ++j) {
 			for (uint i = 0; i < horizontal_bin_num; ++i) {
 				if (current_assignment_map[i][j] != 0) {
@@ -441,6 +462,22 @@ void HierarchicalSampling::generateAssignmentMapsHierarchically()
 			}
 		}
 		previous_assigned_maps.push_back(current_assignment_map);
+	}
+	else if (params.ratio_threshold == 0.0) {
+		DensityMap old = previous_assigned_maps.back();
+		for (uint j = 0; j < vertical_bin_num; ++j) {
+			for (uint i = 0; i < horizontal_bin_num; ++i) {
+				if (old[i][j] != 0 && current_assignment_map[i][j] == 0)
+					_removed.push_back(make_pair(i, j));
+				else if (old[i][j] == 0 && current_assignment_map[i][j] != 0)
+					_added.push_back(make_pair(i, j));
+				old[i][j] = current_assignment_map[i][j];
+				//output << changed_map[i][j];
+				if (old[i][j] == 1) ++point_num;
+				//output << ',';
+			}
+		}
+		previous_assigned_maps.push_back(move(old));
 	}
 	else {
 		//ofstream output(string("./results/test_csv/updateNeeded_")+to_string(last_frame_id)+".csv", ios_base::trunc);
@@ -454,6 +491,11 @@ void HierarchicalSampling::generateAssignmentMapsHierarchically()
 						_added.push_back(make_pair(i, j));
 					old[i][j] = current_assignment_map[i][j];
 					//output << changed_map[i][j];
+				}
+				// forcely remove points out of the sliding window
+				if (params.is_streaming && py.visibility_map[max_level][i][j] == 0 && old[i][j] != 0) {
+					_removed.push_back(make_pair(i, j));
+					old[i][j] = 0;
 				}
 				if (old[i][j] == 1) ++point_num;
 				//output << ',';
@@ -481,17 +523,17 @@ Indices HierarchicalSampling::selectSeeds()
 	return result;
 }
 
-pair<TempPointSet, TempPointSet>* HierarchicalSampling::getSeedsDifference()
+pair<PointSet, PointSet>* HierarchicalSampling::getSeedsDifference()
 {
-	TempPointSet removed, added;
+	PointSet removed, added;
 	static int current_point_num;
 	if (is_first_frame) current_point_num = 0;
 
 	for (auto& idx : this->_removed) {
-		removed.push_back(elected_points[idx.first][idx.second].get());
+		removed.push_back(make_unique<LabeledPoint>(elected_points[idx.first][idx.second]));
 	}
 	for (auto& idx : this->_added) {
-		added.push_back(elected_points[idx.first][idx.second].get());
+		added.push_back(make_unique<LabeledPoint>(elected_points[idx.first][idx.second]));
 	}
 	int change = ((int)added.size() - (int)removed.size());
 	qDebug() << "modified points:" << (int)added.size() + (int)removed.size();
@@ -500,40 +542,40 @@ pair<TempPointSet, TempPointSet>* HierarchicalSampling::getSeedsDifference()
 	//qDebug() << "The number of points in current frame: " << current_point_num;
 
 	last_frame_id = previous_assigned_maps.size() - 1;
-	return new pair<TempPointSet, TempPointSet>(removed, added);
+	return new pair<PointSet, PointSet>(move(removed), move(added));
 }
 
-pair<TempPointSet, TempPointSet> HierarchicalSampling::getSeedsWithDiff()
+pair<PointSet, PointSet> HierarchicalSampling::getSeedsWithDiff()
 {
-	TempPointSet result, diff;
+	PointSet result, diff;
 
 	for (uint i = 0; i < horizontal_bin_num; ++i) {
 		for (uint j = 0; j < vertical_bin_num; ++j) {
 			if (previous_assigned_maps[params.displayed_frame_id][i][j] != 0) {
 				if (last_frame_id != -1 && previous_assigned_maps[last_frame_id][i][j] != 0) {
-					result.push_back(elected_points[i][j].get());
+					result.push_back(make_unique<LabeledPoint>(elected_points[i][j]));
 				}
 				else {
-					diff.push_back(elected_points[i][j].get());
+					diff.push_back(make_unique<LabeledPoint>(elected_points[i][j]));
 				}
 			}
 		}
 	}
 	last_frame_id = params.displayed_frame_id;
-	return make_pair(result, diff);
+	return make_pair(move(result), move(diff));
 }
 
-TempPointSet HierarchicalSampling::getSeeds()
+PointSet HierarchicalSampling::getSeeds()
 {
-	if (previous_assigned_maps.empty()) return TempPointSet();
+	if (previous_assigned_maps.empty()) return PointSet();
 
 	int frame_id = params.displayed_frame_id > previous_assigned_maps.size() ? previous_assigned_maps.size() - 1 : params.displayed_frame_id - 1;
 
-	TempPointSet result;
+	PointSet result;
 	for (uint i = 0; i < horizontal_bin_num; ++i) {
 		for (uint j = 0; j < vertical_bin_num; ++j) {
 			if (previous_assigned_maps[frame_id][i][j] != 0) {
-				result.push_back(elected_points[i][j].get());
+				result.push_back(make_unique<LabeledPoint>(elected_points[i][j]));
 			}
 		}
 	}

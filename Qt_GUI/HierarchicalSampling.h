@@ -43,12 +43,12 @@ public:
 	HierarchicalSampling(const QRect& bounding_rect);
 
 	/* main function that contains the framework */
-	std::pair<TempPointSet, TempPointSet>* execute(const FilteredPointSet* origin, bool is_first_frame);
+	std::pair<PointSet, PointSet>* execute(const FilteredPointSet* origin, bool is_first_frame);
 
 	Indices selectSeeds();
-	std::pair<TempPointSet, TempPointSet>* getSeedsDifference();
-	std::pair<TempPointSet, TempPointSet> getSeedsWithDiff();
-	TempPointSet getSeeds();
+	std::pair<PointSet, PointSet>* getSeedsDifference();
+	std::pair<PointSet, PointSet> getSeedsWithDiff();
+	PointSet getSeeds();
 
 	int getFrameID() { return last_frame_id; }
 	uint getIndexByPos(const QPointF& pos) {
@@ -72,6 +72,15 @@ private:
 	void convertToDensityMap(const FilteredPointSet* origin);
 	void constructPyramids();
 	void generateAssignmentMapsHierarchically();
+
+	struct DateHash {
+	public:
+		std::size_t operator()(const QDate &d) const
+		{
+			return std::hash<int>{}(d.year()) * 372 + std::hash<int>{}(d.month()) * 31 + std::hash<int>{}(d.day()); // 12 * 31 = 372
+		}
+	};
+	std::unordered_map<QDate, DensityMap, DateHash> sliding_window;
 
 	Pyramid py;
 	std::vector<std::vector<bool>> changed_map;

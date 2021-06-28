@@ -1,8 +1,8 @@
 #include "ReservoirSampling.h"
 
-const static int seeds_num = 2100;
-
 using namespace std;
+
+int ReservoirSampling::seeds_num = 5500;
 
 ReservoirSampling::ReservoirSampling()
 {
@@ -11,9 +11,10 @@ ReservoirSampling::ReservoirSampling()
 	elected_points = make_unique<FilteredPointSet>();
 	removed_cache = make_unique<PointSet>();
 	int_dis = uniform_int_distribution<>(0, seeds_num-1);
+	qDebug() << "Reservoir seeds:" << seeds.size();
 }
 
-pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPointSet* origin, bool is_first_frame)
+pair<PointSet, PointSet>* ReservoirSampling::execute(const FilteredPointSet* origin, bool is_first_frame)
 {
 	chrono::time_point<chrono::steady_clock> start = chrono::high_resolution_clock::now();
 	
@@ -40,7 +41,7 @@ pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPoint
 			next_target = visited_num + (int)floor(log(double_dist(gen)) / log(1 - W)) + 1;
 	}
 	
-	TempPointSet removed;
+	PointSet removed;
 	for (; it != origin->cend(); ++it) {
 		++visited_num;
 		if (visited_num >= next_target) {
@@ -50,7 +51,7 @@ pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPoint
 				_added.emplace(it->first);
 			}
 			else {
-				removed.push_back(elected_points->at(seeds[idx]).get());
+				removed.push_back(make_unique<LabeledPoint>(elected_points->at(seeds[idx])));
 				removed_cache->push_back(move(elected_points->at(seeds[idx])));
 				_added.emplace(it->first);
 				modified[idx] = true;
@@ -65,12 +66,12 @@ pair<TempPointSet, TempPointSet>* ReservoirSampling::execute(const FilteredPoint
 	}
 	qDebug() << "removed points:" << removed.size();
 
-	TempPointSet added;
+	PointSet added;
 	for (auto& idx : _added) {
-		added.push_back(elected_points->at(idx).get());
+		added.push_back(make_unique<LabeledPoint>(elected_points->at(idx)));
 	}
 	qDebug() << "execution:" << (double)(chrono::high_resolution_clock::now() - start).count() / 1e9;
 
 	qDebug() << "modified points: " << ((int)added.size() + (int)removed.size());
-	return new pair<TempPointSet, TempPointSet>(removed, added);
+	return new pair<PointSet, PointSet>(move(removed), move(added));
 }

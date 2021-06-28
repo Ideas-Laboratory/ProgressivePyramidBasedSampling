@@ -179,6 +179,7 @@
     <ClCompile Include="HierarchicalSampling.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="qt_gui.cpp" />
+    <ClCompile Include="RandomSampling.cpp" />
     <ClCompile Include="ReservoirSampling.cpp" />
     <ClCompile Include="SamplingProcessViewer.cpp" />
     <ClCompile Include="ControlPanelWidget.cpp" />
@@ -269,6 +270,7 @@
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">"$(QTDIR)\bin\moc.exe"  "%(FullPath)" -o ".\GeneratedFiles\$(ConfigurationName)\moc_%(Filename).cpp"  -DUNICODE -D_UNICODE -DWIN32 -DWIN64 -DQT_NO_DEBUG -DNDEBUG -DQT_GUI_LIB -DQT_WIDGETS_LIB -DQT_PRINTSUPPORT_LIB -DQT_SVG_LIB -DQT_CORE_LIB "-I.\GeneratedFiles" "-I." "-I$(QTDIR)\include" "-I.\GeneratedFiles\$(ConfigurationName)\." "-I$(QTDIR)\include\QtGui" "-I$(QTDIR)\include\QtWidgets" "-I$(QTDIR)\include\QtPrintSupport" "-I$(QTDIR)\include\QtSvg" "-I$(QTDIR)\include\QtCore"</Command>
     </CustomBuild>
     <ClInclude Include="HierarchicalSampling.h" />
+    <ClInclude Include="RandomSampling.h" />
     <ClInclude Include="ReservoirSampling.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>

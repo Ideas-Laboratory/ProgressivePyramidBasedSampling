@@ -9,7 +9,9 @@ class ReservoirSampling
 public:
 	ReservoirSampling();
 	Indices selectSeeds() { return seeds; }
-	std::pair<TempPointSet, TempPointSet>* execute(const FilteredPointSet* origin, bool is_first_frame);
+	std::pair<PointSet, PointSet>* execute(const FilteredPointSet* origin, bool is_first_frame);
+
+	static int seeds_num;
 
 private:
 	Indices seeds;

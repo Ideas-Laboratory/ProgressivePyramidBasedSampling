@@ -89,6 +89,9 @@
     <ClCompile Include="HierarchicalSampling.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="RandomSampling.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="qt_gui.h">
@@ -133,6 +136,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="HierarchicalSampling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RandomSampling.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

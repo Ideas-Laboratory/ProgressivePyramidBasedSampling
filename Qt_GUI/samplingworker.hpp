@@ -5,6 +5,7 @@
 #include "HierarchicalSampling.h"
 #include "AdaptiveBinningSampling.h"
 #include "ReservoirSampling.h"
+#include "RandomSampling.h"
 
 class SamplingWorker : public QObject {
 	Q_OBJECT
@@ -13,7 +14,7 @@ public:
 	SamplingWorker() { openDataSource(data_source, MY_DATASET_FILENAME); }
 	uint getPointCount() { return point_count; }
 	const std::vector<uint>& getSelected() { return seeds; }
-	TempPointSet getSeedsOfSpecificFrame() { return hs.getSeeds(); }
+	PointSet getSeedsOfSpecificFrame() { return hs.getSeeds(); }
 	uint getIndexByPos(const QPointF& pos) { return hs.getIndexByPos(pos); }
 
 	void setDataSource(const std::string& data_path);
@@ -25,18 +26,19 @@ public slots:
 
 signals:
 	void readFinished(FilteredPointSet* filtered_points);
-	void sampleFinished(std::pair<TempPointSet, TempPointSet>* removed_n_added);
+	void sampleFinished(std::pair<PointSet, PointSet>* removed_n_added);
 	void writeFrame(int frame_id);
 
 private:
 	HierarchicalSampling hs{ QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) };
 	ReservoirSampling rs;
 	AdaptiveBinningSampling abs;
+	RandomSampling rands;
 
 	Indices seeds;
 	uint point_count = 0;
 	FilteredPointSet* _filtered_new_data = nullptr;
-	std::pair<TempPointSet, TempPointSet>* _result = nullptr;
+	std::pair<PointSet, PointSet>* _result = nullptr;
 
 	std::unordered_map<uint, std::string>* class2label;
 	std::ifstream data_source;
