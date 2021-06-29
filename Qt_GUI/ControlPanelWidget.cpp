@@ -46,12 +46,13 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 		else
 			spin_frame_id->setRange(1, this->viewer->getPointNum() / params.chunk_size + 1);
 		spin_frame_id->setValue(params.displayed_frame_id + 1);
+		spin_frame_id->setToolTip(
+			"You can change it and use the \"Show\" button to display the result of a previous frame.");
 		connect(spin_frame_id, QOverload<int>::of(&QSpinBox::valueChanged),
 			[](int value) { params.displayed_frame_id = value - 1; });
 		connect(viewer, &SamplingProcessViewer::finished, [this, spin_frame_id]() {
-			//auto &result = div((int)this->viewer->getPointNum(), params.batch);
-			//spin_frame_id->setMaximum(result.rem == 0 ? result.quot : result.quot + 1);
 			if (!params.is_streaming) spin_frame_id->setMaximum(200);
+			else spin_frame_id->setMaximum(INT_MAX);
 		});
 		connect(viewer, &SamplingProcessViewer::frameChanged, spin_frame_id, &QSpinBox::setValue);
 
@@ -59,6 +60,8 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 		QSpinBox* spin_batch = new QSpinBox(this);
 		spin_batch->setRange(1, 2000000);
 		spin_batch->setValue(params.chunk_size);
+		spin_batch->setToolTip(
+			"The number of points loaded at one time.");
 		connect(spin_batch, QOverload<int>::of(&QSpinBox::valueChanged), [this, spin_frame_id](int value) {
 			params.chunk_size = value;
 			auto& result = div((int)this->viewer->getPointNum(), params.chunk_size);
@@ -67,12 +70,16 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 		
 		QLabel* step_label = new QLabel("Time step:", this);
 		QSpinBox* spin_step = new QSpinBox(this);
+		spin_step->setToolTip(
+			"The size of time step used in streaming setting, unit is day.");
 		spin_step->setValue(params.time_step);
 		connect(spin_step, QOverload<int>::of(&QSpinBox::valueChanged),
 			[this](int value) { params.time_step = value;	});
 
 		QLabel* window_label = new QLabel("Window size:", this);
 		QSpinBox* spin_window = new QSpinBox(this);
+		spin_window->setToolTip(
+			"The size of time window used in streaming setting, unit is day.");
 		spin_window->setValue(params.time_window);
 		connect(spin_window, QOverload<int>::of(&QSpinBox::valueChanged),
 			[this](int value) { params.time_window = value;	});
@@ -84,6 +91,8 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 
 		QLabel* stop_level_label = new QLabel("Stop level:", this);
 		QSpinBox* spin_stop_level = new QSpinBox(this);
+		spin_stop_level->setToolTip(
+			"Control the observed level of details in the sampling result.");
 		spin_stop_level->setValue(params.stop_level);
 		connect(spin_stop_level, QOverload<int>::of(&QSpinBox::valueChanged), [this](int value) {
 			params.stop_level = value;
@@ -91,6 +100,8 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 
 		QLabel* density_threshold_label = new QLabel("Density threshold:", this);
 		QDoubleSpinBox* spin_density_threshold = new QDoubleSpinBox(this);
+		spin_density_threshold->setToolTip(
+			"Determine which regions are classified as low-density.");
 		spin_density_threshold->setDecimals(4);
 		spin_density_threshold->setRange(0.0, 1.0);
 		spin_density_threshold->setValue(params.density_threshold);
@@ -99,6 +110,8 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 
 		QLabel* outlier_weight_label = new QLabel("Outlier weight:", this);
 		QDoubleSpinBox* spin_outlier_weight = new QDoubleSpinBox(this);
+		spin_outlier_weight->setToolTip(
+			"Determine how many data points in low-density regions we want to keep.");
 		spin_outlier_weight->setDecimals(4);
 		spin_outlier_weight->setRange(0.0, 1.0);
 		spin_outlier_weight->setSingleStep(0.1);
@@ -106,8 +119,10 @@ ControlPanelWidget::ControlPanelWidget(SamplingProcessViewer* viewer, QWidget* p
 		connect(spin_outlier_weight, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
 			[this](double value) { params.outlier_weight = value; });
 
-		QLabel* eps_label = new QLabel("Error tolerance:", this);
+		QLabel* eps_label = new QLabel("Ratio threshold:", this);
 		QDoubleSpinBox* spin_eps = new QDoubleSpinBox(this);
+		spin_eps->setToolTip(
+			"Influence the temporal coherence between successive frames.");
 		spin_eps->setDecimals(2);
 		spin_eps->setRange(0.0, 1.0);
 		spin_eps->setValue(params.ratio_threshold);
