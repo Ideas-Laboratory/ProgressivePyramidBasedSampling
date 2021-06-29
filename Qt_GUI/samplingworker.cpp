@@ -5,13 +5,10 @@ void SamplingWorker::readAndSample()
 	int frame_id = 1;
 	qDebug() << "starting...";
 	while (!data_source.eof()) {
-		PointSet *data_chunk = readDataSource(data_source, class2label, params.batch);
+		auto start = std::chrono::high_resolution_clock::now();
+		PointSet* data_chunk = readDataSource(data_source, class2label);
 		if (point_count == 0) {
-			real_extent = getExtent(data_chunk); // use the first chunk to approximate the extent of the whole data
-			//real_extent = { -0.278698, -0.494428,5.75817,3.9781}; // person activity
-			//real_extent = { -2.02172e+06, -2.115e+06,2.51266e+06,730758}; // U.S. census
-			//real_extent = { -74.238,40.51,-73.728,40.906 }; // taxis.csv
-			//real_extent = { -7.516225,49.912941,1.762010,60.75754 }; // uk_accident.csv
+			real_extent = getExtent(data_chunk); // use the extent of the first batch for the whole data
 		}
 		if (data_chunk->empty()) {
 			delete data_chunk;
@@ -21,10 +18,17 @@ void SamplingWorker::readAndSample()
 		_filtered_new_data = filter(data_chunk, real_extent, point_count);
 		linearScale(_filtered_new_data, real_extent, visual_extent);
 
-		_result = hws.execute(_filtered_new_data, point_count == 0);
-		seeds = hws.selectSeeds();
-		point_count += data_chunk->size(); 
+		// run sampling methods
+		_result = hs.execute(_filtered_new_data, point_count == 0);
+		seeds = hs.getSeedIndices();
+		//_result = abs.executeWithoutCallback(_filtered_new_data, { QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) }, point_count == 0);
+		//_result = rs.execute(_filtered_new_data, point_count == 0);
+		//_result = rands.execute(_filtered_new_data);
+		qDebug() << "total_execution: " << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - start).count() / 1e9;
+		//qDebug() << _result->second.size();
 
+		// post-processing
+		point_count += data_chunk->size();
 		emit readFinished(_filtered_new_data);
 		emit sampleFinished(_result);
 		emit writeFrame(frame_id);
@@ -34,9 +38,7 @@ void SamplingWorker::readAndSample()
 	emit finished();
 }
 
-
-
-void SamplingWorker::setDataSource(std::string& data_path)
+void SamplingWorker::setDataSource(const std::string& data_path)
 {
 	data_source.close();
 	point_count = 0;
@@ -46,5 +48,5 @@ void SamplingWorker::setDataSource(std::string& data_path)
 
 void SamplingWorker::updateGrids()
 {
-	hws = HaarWaveletSampling{ QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) };
+	hs = HierarchicalSampling{ QRect(MARGIN.left, MARGIN.top, CANVAS_WIDTH - MARGIN.left - MARGIN.right, CANVAS_HEIGHT - MARGIN.top - MARGIN.bottom) };
 }

@@ -1,0 +1,77 @@
+#include "ReservoirSampling.h"
+
+using namespace std;
+
+int ReservoirSampling::seeds_num = 5500;
+
+ReservoirSampling::ReservoirSampling()
+{
+	visited_num = 0;
+	seeds.resize(seeds_num);
+	elected_points = make_unique<FilteredPointSet>();
+	removed_cache = make_unique<PointSet>();
+	int_dis = uniform_int_distribution<>(0, seeds_num-1);
+	qDebug() << "Reservoir seeds:" << seeds.size();
+}
+
+pair<PointSet, PointSet>* ReservoirSampling::execute(const FilteredPointSet* origin, bool is_first_frame)
+{
+	chrono::time_point<chrono::steady_clock> start = chrono::high_resolution_clock::now();
+	
+	vector<bool> modified(seeds.size(), false);
+	unordered_set<uint> _added;
+
+	auto it = origin->cbegin();
+	if (is_first_frame) {
+		visited_num = 0;
+		elected_points->clear();
+		removed_cache->clear();
+		W = exp(log(double_dist(gen)) / seeds_num);
+	}
+	if (visited_num < seeds_num) {
+		fill(modified.begin() + visited_num, modified.end(), true);
+
+		for (; it != origin->cend() && visited_num < seeds_num; ++it) {
+			seeds[visited_num] = it->first;
+			elected_points->emplace(it->first, make_unique<LabeledPoint>(it->second));
+			_added.emplace(it->first);
+			++visited_num;
+		}
+		if(visited_num == seeds_num)
+			next_target = visited_num + (int)floor(log(double_dist(gen)) / log(1 - W)) + 1;
+	}
+	
+	PointSet removed;
+	for (; it != origin->cend(); ++it) {
+		++visited_num;
+		if (visited_num >= next_target) {
+			int idx = int_dis(gen);
+			if (modified[idx]) {
+				_added.erase(seeds[idx]);
+				_added.emplace(it->first);
+			}
+			else {
+				removed.push_back(make_unique<LabeledPoint>(elected_points->at(seeds[idx])));
+				removed_cache->push_back(move(elected_points->at(seeds[idx])));
+				_added.emplace(it->first);
+				modified[idx] = true;
+			}
+			elected_points->erase(seeds[idx]);
+			elected_points->emplace(it->first, make_unique<LabeledPoint>(it->second));
+			seeds[idx] = it->first;
+
+			W *= exp(log(double_dist(gen)) / seeds_num);
+			next_target += (int)floor(log(double_dist(gen)) / log(1 - W)) + 1;
+		}
+	}
+	qDebug() << "removed points:" << removed.size();
+
+	PointSet added;
+	for (auto& idx : _added) {
+		added.push_back(make_unique<LabeledPoint>(elected_points->at(idx)));
+	}
+	qDebug() << "execution:" << (double)(chrono::high_resolution_clock::now() - start).count() / 1e9;
+
+	qDebug() << "modified points: " << ((int)added.size() + (int)removed.size());
+	return new pair<PointSet, PointSet>(move(removed), move(added));
+}

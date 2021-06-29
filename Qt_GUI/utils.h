@@ -12,7 +12,7 @@ extern Param params;
 extern std::vector<int> selected_class_order;
 
 void openDataSource(std::ifstream& input, std::string filename);
-PointSet* readDataSource(std::ifstream& input, std::unordered_map<uint, std::string>* class2label, int chuck_size);
+PointSet* readDataSource(std::ifstream& input, std::unordered_map<uint, std::string>* class2label);
 FilteredPointSet* filter(PointSet* points, const Extent& ext, uint pos);
 
 inline double linearScale(double val, double oldLower, double oldUpper, double lower, double upper)

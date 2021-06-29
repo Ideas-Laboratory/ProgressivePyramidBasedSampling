@@ -23,9 +23,9 @@ std::vector<std::weak_ptr<BinningTreeNode>> AdaptiveBinningSampling::getAllLeave
 	return leaves;
 }
 
-std::pair<TempPointSet, TempPointSet>* AdaptiveBinningSampling::execute(const FilteredPointSet * origin, const QRect& bounding_rect, bool is_1st)
+std::pair<PointSet, PointSet>* AdaptiveBinningSampling::execute(const FilteredPointSet * origin, const QRect& bounding_rect, bool is_1st)
 {
-	if (origin->empty()) return new pair<TempPointSet, TempPointSet>();
+	if (origin->empty()) return new std::pair<PointSet, PointSet>();;
 
 	if (is_1st)
 		tree = make_unique<BinningTree>(origin, bounding_rect);
@@ -108,12 +108,14 @@ Indices AdaptiveBinningSampling::KDTreeGuidedSampling()
 	return samples;
 }
 
-std::pair<TempPointSet, TempPointSet>* AdaptiveBinningSampling::executeWithoutCallback(const FilteredPointSet * origin, const QRect& bounding_rect, bool is_1st)
+std::pair<PointSet, PointSet>* AdaptiveBinningSampling::executeWithoutCallback(const FilteredPointSet * origin, const QRect& bounding_rect, bool is_1st)
 {
-	if (origin->empty()) return new pair<TempPointSet, TempPointSet>();
+	if (origin->empty()) return new std::pair<PointSet, PointSet>();
 
-	if (is_1st)
+	if (is_1st) {
 		tree = make_unique<BinningTree>(origin, bounding_rect);
+		last_seeds.clear();
+	}
 	else
 		tree->updateMinGrids(origin);
 	current_iteration_status = { 0,0 };
@@ -127,7 +129,7 @@ std::pair<TempPointSet, TempPointSet>* AdaptiveBinningSampling::executeWithoutCa
 	} while (notFinish());
 	auto &samples = leavesToSeeds(); //KDTreeGuidedSampling();
 	//qDebug() << (std::clock() - start) / (double)CLOCKS_PER_SEC;
-	if(is_1st) qDebug() << "The number of points in first frame: " << (int)samples.size();
+	if (is_1st) qDebug() << "The number of points in first frame: " << (int)samples.size();
 	else qDebug() << "The number of points in current frame: " << (int)samples.size();
 
 	current_iteration_status.seed_num = samples.size();
@@ -189,17 +191,17 @@ Indices AdaptiveBinningSampling::leavesToSeeds()
 	return seeds;
 }
 
-pair<TempPointSet, TempPointSet>* AdaptiveBinningSampling::findRemovedAndAdded(const Indices & seeds)
+pair<PointSet, PointSet>* AdaptiveBinningSampling::findRemovedAndAdded(const Indices & seeds)
 {
 	Indices current = seeds, removed_idx, added_idx;
 	sort(current.begin(), current.end());
 	set_difference(last_seeds.begin(), last_seeds.end(), current.begin(), current.end(), back_inserter(removed_idx));
 	set_difference(current.begin(), current.end(), last_seeds.begin(), last_seeds.end(), back_inserter(added_idx));
-	TempPointSet removed, added;
+	PointSet removed, added;
 	for (auto idx : removed_idx)
-		removed.push_back(tree->getDataset()->at(idx).get());
+		removed.push_back(make_unique<LabeledPoint>(tree->getDataset()->at(idx)));
 	for (auto idx : added_idx)
-		added.push_back(tree->getDataset()->at(idx).get());
+		added.push_back(make_unique<LabeledPoint>(tree->getDataset()->at(idx)));
 	last_seeds = move(current);
-	return new pair<TempPointSet, TempPointSet>(move(removed), move(added));
+	return new pair<PointSet, PointSet>(move(removed), move(added));
 }

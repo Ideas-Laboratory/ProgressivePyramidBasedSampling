@@ -1,5 +1,7 @@
 #include "BinningTree.h"
 
+TreeParams tree_sampling_params = { 0.003, 0.013, 4 };
+
 using namespace std;
 
 BinningTree::BinningTree(const FilteredPointSet* origin, const QRect& bounding_rect)

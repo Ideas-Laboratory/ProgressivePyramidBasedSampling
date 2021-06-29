@@ -5,10 +5,9 @@
 #include <QSvgGenerator>
 #include <QAbstractGraphicsShapeItem>
 
-//#define PALETTE {"#4478BD", "#9ecae9", "#f58518", "#59ba04", "#54a24b", "#88d27a", "#b79a20", "#f2cf5b", "#439894", "#83bcb6", "#e45756", "#ff9d98", "#79706e", "#bab0ac", "#d67195", "#fcbfd2", "#b279a2", "#d6a5c9", "#9e765f", "#d8b5a5"}
-#define PALETTE {"#d98393", "#a84a90", "#87b72a", "#d62728", "#af7e65", "#b2d254", "#64acac", "#1f77b4", "#ad5a33", "#54e854", "#9bd5df", "#efe926", "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5"} // paperscape palette
-
-//#define DRAW_ORIGIN
+#define PALETTE {"#4478BD", "#45b4c1", "#f58518", "#59ba04", "#54a24b", "#88d27a", "#b79a20", "#f2cf5b", "#439894", "#83bcb6", "#e45756", "#ff9d98", "#79706e", "#bab0ac", "#d67195", "#fcbfd2", "#b279a2", "#d6a5c9", "#9e765f", "#d8b5a5"}
+//#define PALETTE {"#1f77b4", "#c5b0d5", "#ff9896", "#d62728", "#aec7e8", "#2ca02c", "#98df8a", "#ffbb78", "#9467bd", "#ff7f0e", "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5"} // Tableau 20
+//#define DRAW_ORIGIN // whether or not draw the origin scatterplot
 
 SamplingProcessViewer::SamplingProcessViewer(std::string&& data_name, std::unordered_map<uint, std::string>* class2label, QWidget* parent)
 	: QGraphicsView(parent), data_name(data_name), class2label(class2label)
@@ -36,21 +35,15 @@ SamplingProcessViewer::SamplingProcessViewer(std::string&& data_name, std::unord
 	paletteToColors();
 
 	connect(this, &SamplingProcessViewer::sampleStart, &sw, &SamplingWorker::readAndSample);
-	connect(&sw, &SamplingWorker::readFinished, this, &SamplingProcessViewer::updateClassInfo);
-	connect(&sw, &SamplingWorker::sampleFinished, this, &SamplingProcessViewer::drawSelectedPointsProgressively);
-	connect(&sw, &SamplingWorker::writeFrame, [this](int frame_id) { emit frameChanged(frame_id); });
-	//connect(&sw, &SamplingWorker::writeFrame, this, &SamplingProcessViewer::generateFiles);
-	connect(&sw, &SamplingWorker::finished, [this]() {
-		sw.setDataSource(data_path);
-		emit finished();
-	});
-
 #ifdef DRAW_ORIGIN
 	connect(&sw, &SamplingWorker::readFinished, this, &SamplingProcessViewer::drawPointsProgressively);
 #else
 	connect(&sw, &SamplingWorker::readFinished, this, [](auto ptr) { delete ptr; });
-#endif
-
+#endif // DRAW_ORIGIN
+	//connect(&sw, &SamplingWorker::readFinished, this, &SamplingProcessViewer::updateClassInfo);
+	connect(&sw, &SamplingWorker::sampleFinished, this, &SamplingProcessViewer::drawSelectedPointsProgressively);
+	connect(&sw, &SamplingWorker::writeFrame, [this](int frame_id) { emit frameChanged(frame_id); });
+	//color_index = 1;
 	sw.moveToThread(&workerThread);
 	workerThread.start();
 }
@@ -67,24 +60,14 @@ void SamplingProcessViewer::mouseReleaseEvent(QMouseEvent *me)
 {
 }
 
-void SamplingProcessViewer::setDataSource(std::string&& dp)
+void SamplingProcessViewer::setDataPath(std::string&& dp)
 {
 	workerThread.quit();
 	workerThread.wait();
 
-	data_path = std::move(dp);
-	sw.setDataSource(data_path);
+	data_path = dp;
 
-	class2label->clear();
-	updateClassInfo();
-
-	this->scene()->clear();
-	virtual_scene->clear();
-	last_time = 0l;
-
-	pos2item.clear();
-	_removed_and_added.first.clear();
-	_removed_and_added.second.clear();
+	reinitializeScreen();
 
 	workerThread.start();
 	emit inputImageChanged();
@@ -96,14 +79,18 @@ void SamplingProcessViewer::sample()
 		sw.updateGrids();
 		grid_width_changed = false;
 	}
+	sw.setDataSource(data_path);
+	reinitializeScreen();
 	emit sampleStart();
-	last_time = clock();
+
+	emit finished();
 }
 
 void SamplingProcessViewer::showSpecificFrame()
 {
-	auto &seeds = sw.getSeedPoints();
+	auto& seeds = sw.getSeedsOfSpecificFrame();
 	drawPointRandomly(seeds);
+	emit finished();
 }
 
 void SamplingProcessViewer::saveImagePNG(const QString & path, bool is_virtual)
@@ -159,75 +146,55 @@ void SamplingProcessViewer::writeResult(const QString & path)
 void SamplingProcessViewer::drawPointsProgressively(FilteredPointSet *points)
 {
 	//params.use_alpha_channel = true;
+	QDate *last_date = nullptr;
 	for (auto &pr : *points) {
 		auto &p = pr.second;
-		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label], true);
+		auto it = drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[0], true);
+		if (params.is_streaming) {
+			date2item[p->date->toJulianDay()].push_back(it);
+			if (last_date == nullptr || *last_date < *p->date)
+				last_date = p->date.get(); // find the last date
+		}
 	}
+	if (params.is_streaming) {
+		for (auto it = date2item.begin(); it != date2item.end();) {
+			if (QDate::fromJulianDay(it->first).daysTo(*last_date) > params.time_window) {
+				for (auto ptr : it->second)
+					if (ptr) { virtual_scene->removeItem(ptr); }
+				it = date2item.erase(it);
+			}
+			else
+				++it;
+		}
+	}
+	//saveImagePNG("./results/StockMarket/"+last_date->toString("yyyy-MM-dd")+".png", true);
 	//params.use_alpha_channel = false;
 	delete points;
 }
 
-void SamplingProcessViewer::drawSelectedPointsProgressively(std::pair<TempPointSet, TempPointSet>* removed_n_added)
+void SamplingProcessViewer::drawSelectedPointsProgressively(std::pair<PointSet, PointSet>* removed_n_added)
 {
 	auto begin = std::chrono::high_resolution_clock::now();
 	for (auto &p : removed_n_added->first) {
 		double key = p->pos.x() * CANVAS_HEIGHT + p->pos.y();
-		auto item = this->scene()->itemAt(p->pos, QGraphicsView::transform());
+		auto item = pos2item[key];
 		if (item) { this->scene()->removeItem(item); }
+		if (pos2item.find(key) != pos2item.end()) pos2item.erase(key);
 	}
+	QDate *last_date = nullptr;
 	for (auto &p : removed_n_added->second) {
-		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
+		auto it = drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
+		pos2item.emplace(p->pos.x() * CANVAS_HEIGHT + p->pos.y(), it);
+		if (params.is_streaming && (last_date == nullptr || *last_date < *p->date))
+				last_date = p->date.get(); // find the last date
 	}
 	auto end = std::chrono::high_resolution_clock::now();
 	qDebug() << "render: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count() / 1e9;
-	if (last_time > 0) {
-		qDebug() << "duration: " << (clock() - last_time)/(double)CLOCKS_PER_SEC;
-	}
-	last_time = clock();
-	delete removed_n_added;
-}
-
-void SamplingProcessViewer::drawSelectedPointDiffsProgressively(std::pair<TempPointSet, TempPointSet>* removed_n_added)
-{
-	static int r = params.point_radius;
-	if (r != params.point_radius) r = params.point_radius;
-
-	if (pos2item.empty()) {
-		for (auto &p : removed_n_added->second) {
-			int key = (int)p->pos.x() * CANVAS_HEIGHT + (int)p->pos.y();
-			auto it = this->scene()->addEllipse(p->pos.x() - r, p->pos.y() - r, 2 * r, 2 * r, Qt::NoPen, color_brushes[0]); // blue
-			pos2item.emplace(key, it);
-		}
-	}
-	else {
-		for (auto it = _removed_and_added.first.begin(); it != _removed_and_added.first.end(); ) {
-			if (*it) {
-				int pos = ((int)(*it)->boundingRect().x() + r) * CANVAS_HEIGHT + ((int)(*it)->boundingRect().y() + r);
-				pos2item.erase(pos);
-				this->scene()->removeItem(*it);
-			}
-			++it;
-		}
-		for (auto it = _removed_and_added.second.begin(); it != _removed_and_added.second.end();) {
-			(*it)->setBrush(color_brushes[0]);
-			++it;
-		}
-		_removed_and_added.first.clear();
-		_removed_and_added.second.clear();
-		for (auto &p : removed_n_added->first) {
-			int key = (int)p->pos.x() * CANVAS_HEIGHT + (int)p->pos.y();
-			if (pos2item.find(key) != pos2item.end()) {
-				pos2item[key]->setBrush(color_brushes[5]); // green
-				_removed_and_added.first.push_back(pos2item[key]);
-			}
-		}
-		for (auto &p : removed_n_added->second) {
-			int key = (int)p->pos.x() * CANVAS_HEIGHT + (int)p->pos.y();
-			auto it = this->scene()->addEllipse(p->pos.x() - r, p->pos.y() - r, 2 * r, 2 * r, Qt::NoPen, color_brushes[2]); // orange
-			
-			pos2item.emplace(key, it);
-			_removed_and_added.second.push_back(it);
-		}
+	const static QDate print_start(2001, 8, 10), print_end(2001, 10, 10);
+	if (last_date) {
+		qDebug() << *last_date;
+		if (*last_date > print_start && *last_date < print_end)
+			saveImagePNG("./results/StockMarket/PBS_" + last_date->toString("yyyy-MM-dd") + "_" + QString::number(params.ratio_threshold) + ".png");
 	}
 	delete removed_n_added;
 }
@@ -240,13 +207,19 @@ void SamplingProcessViewer::generateFiles(int frame_id)
 	//saveImagePNG(QString(fn_stream.str().c_str()) + "origin_" + QString::number(frame_id) + ".png", true); //_transparent
 
 	fn_stream.precision(4);
-	fn_stream << params.grid_width << '_' << params.end_level << '_';
-	fn_stream << params.data_density_weight << '_' << params.epsilon << '_' << frame_id;
-	//fn_stream << params.grid_width << '_' << tree_sampling_params.threshold << '_'
+	// file name of the result for the hierarchical sampling
+	fn_stream << params.point_radius << '_' << params.grid_width << '_' << params.density_threshold << '_';
+	fn_stream << params.outlier_weight << '_' << params.ratio_threshold << '_' << params.stop_level << '_' << frame_id;
+	// file name of the result for the kd-tree based sampling
+	//fn_stream << "kd_tree_" << params.point_radius << '_' << params.grid_width << '_' << tree_sampling_params.threshold << '_'
 	//	<< tree_sampling_params.occupied_space_ratio << '_' << tree_sampling_params.backtracking_depth << '_' << frame_id;
+	// file name of the result for the reservoir sampling
+	//fn_stream << "reservoir_" << ReservoirSampling::seeds_num << '_' << frame_id;
+	// file name of the result for the random sampling
+	//fn_stream << "random_" << RandomSampling::seeds_num << '_' << frame_id;
 	auto filepath = fn_stream.str();
-	saveImagePNG(QString(filepath.c_str()) + ".png"); // _diff
-	//writeResult(QString(filepath.c_str()) + ".csv");
+	saveImagePNG(QString(filepath.c_str()) + ".png");
+	//writeResult(QString(filepath.c_str()) + ".csv")
 }
 
 void SamplingProcessViewer::updateClassInfo()
@@ -257,23 +230,16 @@ void SamplingProcessViewer::updateClassInfo()
 	}
 }
 
-void SamplingProcessViewer::drawPointByClass(TempPointSet& selected)
-{
+void SamplingProcessViewer::reinitializeScreen() {
+	pos2item.clear();
+	class2label->clear();
+	updateClassInfo();
+
 	this->scene()->clear();
-
-	std::vector<TempPointSet> _class(CLASS_NUM);
-
-	for (auto &p : selected) {
-		_class[p->label].push_back(p);
-	}
-	for (size_t i = 0; i < selected_class_order.size(); i++) {
-		for (auto &p : _class[selected_class_order[i]]) {
-			drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
-		}
-	}
+	virtual_scene->clear();
 }
 
-void SamplingProcessViewer::drawPointRandomly(TempPointSet& selected)
+void SamplingProcessViewer::drawPointRandomly(PointSet& selected)
 {
 	this->scene()->clear();
 
@@ -283,6 +249,20 @@ void SamplingProcessViewer::drawPointRandomly(TempPointSet& selected)
 	for (auto &p : selected) {
 		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
 	}
+}
+
+void SamplingProcessViewer::drawPointsByPair(std::pair<PointSet, PointSet>& selected)
+{
+	this->scene()->clear();
+	
+	for (auto &p : selected.first) {
+		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
+	}
+	color_index = 2;
+	for (auto &p : selected.second) {
+		drawPoint(p->pos.x(), p->pos.y(), params.point_radius, color_brushes[p->label]);
+	}
+	color_index = 0;
 }
 
 void SamplingProcessViewer::redrawPoints()
@@ -299,15 +279,15 @@ void SamplingProcessViewer::paletteToColors()
 	}
 }
 
-void SamplingProcessViewer::drawPoint(qreal x, qreal y, qreal radius, QBrush b, bool is_virtual)
+QGraphicsItem* SamplingProcessViewer::drawPoint(qreal x, qreal y, qreal radius, QBrush b, bool is_virtual)
 {
 	auto s = is_virtual ? virtual_scene : this->scene();
-	if (params.use_alpha_channel) { // draw translucent circles
-		QColor c = b.color(); // color_brushes[0].color(); 
+	if (params.use_alpha_channel) {
+		QColor c = color_brushes[color_index].color();//b.color();
 		c.setAlpha(5);
-		s->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, c);
+		return s->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, c);
 	}
 	else {
-		s->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, b); //color_brushes[0]
+		return s->addEllipse(x - radius, y - radius, 2 * radius, 2 * radius, Qt::NoPen, color_brushes[color_index]);//b.color();
 	}
 }

@@ -53,9 +53,6 @@
     <ClCompile Include="utils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SamplingProcessViewer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="GeneratedFiles\Debug\moc_SamplingProcessViewer.cpp">
       <Filter>Generated Files\Debug</Filter>
     </ClCompile>
@@ -66,9 +63,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="DisplayPanelWidget.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HaarWaveletSampling.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="GeneratedFiles\Debug\moc_samplingworker.cpp">
@@ -84,6 +78,18 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="AdaptiveBinningSampling.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ReservoirSampling.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HierarchicalSampling.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RandomSampling.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SamplingProcessViewer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -120,13 +126,19 @@
     <ClInclude Include="DisplayPanelWidget.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="HaarWaveletSampling.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="BinningTree.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="AdaptiveBinningSampling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ReservoirSampling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HierarchicalSampling.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RandomSampling.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
