@@ -1,4 +1,4 @@
-# Wavelet-based Scatterplots Sampling for Progressive Visualization
+# Pyramid-based Scatterplots Sampling for Progressive Visualization
 
 This is the interactive demo application for the "Pyramid-based Scatterplots Sampling for Progressive and Streaming Data Visualization" paper.
 
